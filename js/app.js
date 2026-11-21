@@ -351,9 +351,11 @@ $('exp').addEventListener('click',e=>{
   const code=btoa(unescape(encodeURIComponent(JSON.stringify(S))));$('impTxt').value=code;
   Promise.resolve().then(()=>navigator.clipboard.writeText(code)).then(()=>{$('impMsg').textContent='Copied. It is also in the box below.'},()=>{$('impMsg').textContent='Copy blocked — select the code in the box and copy it.'});
 });
-function bkApply(d){if(!d||typeof d!=='object'||!d.done)throw 0;S=Object.assign(fresh(),d);fix();save();renderMe();head()}
+function bkApply(d){if(!d||typeof d!=='object'||!d.done)throw 0;const pers=d._personal;delete d._personal;S=Object.assign(fresh(),d);fix();save();
+  if(pers&&typeof pers==='object'&&CT_PERSONAL_SRC!=='file'){try{localStorage.setItem('codetrail-personal',JSON.stringify(pers))}catch(_){}setTimeout(()=>location.reload(),600);return}
+  renderMe();head()}
 function bkNote(){const el=$('bkNote');el.dataset.base=el.dataset.base||el.innerHTML;el.innerHTML=el.dataset.base+(S.bk?` <b>Last backup: ${esc(S.bk)}.</b>`:' <b>No backup yet.</b>')}
-$('bkDown').addEventListener('click',async()=>{const prev=S.bk;S.bk=day();const r=await saveFile(`codetrail-backup-${day()}.json`,JSON.stringify(S,null,1));if(r!=='saved'){S.bk=prev;$('impMsg').textContent=r==='declined'?'Backup cancelled.':'Download is not available here — use Copy progress code instead.';return}save();$('impMsg').textContent='Backup saved. On iPhone, choose Save to Files.';bkNote()});
+$('bkDown').addEventListener('click',async()=>{const prev=S.bk;S.bk=day();const r=await saveFile(`codetrail-backup-${day()}.json`,JSON.stringify(CT_PERSONAL_SRC?Object.assign({},S,{_personal:CT_PERSONAL}):S,null,1));if(r!=='saved'){S.bk=prev;$('impMsg').textContent=r==='declined'?'Backup cancelled.':'Download is not available here — use Copy progress code instead.';return}save();$('impMsg').textContent='Backup saved. On iPhone, choose Save to Files.';bkNote()});
 $('bkUpBtn').addEventListener('click',()=>$('bkUp').click());
 $('bkUp').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{bkApply(JSON.parse(r.result));$('impMsg').textContent='Backup restored.'}catch(_){$('impMsg').textContent='That file is not a CodeTrail backup.'}e.target.value=''};r.readAsText(f)});
 $('imp').addEventListener('click',()=>{
@@ -469,10 +471,28 @@ const WSRC=[
 "};"].join('\n');
 let W=null,wReady=null,runId=0,pending=null,runTimer=null;
 const RUN_LIMIT=10;
+/* With the offline cache active, run the worker from a same-origin file so its Pyodide
+   downloads go through sw.js; elsewhere (the Claude link) a blob worker is enough. */
+function makeWorker(){
+  if(navigator.serviceWorker&&navigator.serviceWorker.controller){const w=new Worker('js/pyworker.js');w.postMessage({boot:WSRC});return w}
+  return new Worker(URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'})))
+}
+function pyOfflineNote(){const el=$('pyOffMsg');if(!el)return;let d=null;try{d=localStorage.getItem('codetrail-pyoffline')}catch(_){}
+  const sw=!!(navigator.serviceWorker&&navigator.serviceWorker.controller);
+  el.textContent=!sw?'Offline works only in the GitHub Pages version (sri-charan-tummala.github.io/codetrail). This link needs internet.':d?`Python is saved for offline use (${d}).`:'Python is not saved for offline use yet. Tap the button once on Wi-Fi (about 12 MB).'}
+function pyPrefetch(){
+  const el=$('pyOffMsg'),btn=$('pyOff');btn.disabled=true;el.textContent='Downloading Python… this can take a minute.';
+  let w;try{w=makeWorker()}catch(e){btn.disabled=false;el.textContent='Could not start Python here.';return}
+  const done=(ok,msg)=>{clearTimeout(t);try{w.terminate()}catch(_){}btn.disabled=false;if(ok){try{localStorage.setItem('codetrail-pyoffline',day())}catch(_){}pyOfflineNote()}else el.textContent=msg};
+  const t=setTimeout(()=>done(false,'Timed out. Check your connection and try again.'),180000);
+  w.onmessage=e=>{const d=e.data;if(d.fatal)done(false,'Download failed: '+d.fatal);else if(d.id===-1)done(!d.err,d.err?'Python started but sqlite3 failed: '+d.err:'')};
+  w.onerror=()=>done(false,'Python crashed while downloading. Try again.');
+  w.postMessage({id:-1,code:'import sqlite3, json\nsqlite3.connect(":memory:").execute("select 1")\n'});
+}
 function getWorker(){
   if(wReady)return wReady;
   wReady=new Promise((res,rej)=>{
-    try{W=new Worker(URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'})))}catch(e){rej(e);return}
+    try{W=makeWorker()}catch(e){rej(e);return}
     W.onmessage=e=>{const d=e.data;if(d.ready)res();else if(d.fatal)rej(new Error(d.fatal));else onResult(d)};
     W.onerror=ev=>{rej(ev);if(pending)finishError('The Python worker crashed. Press Run to start a fresh one.')};
   });
@@ -1078,4 +1098,6 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-gopipe]')){rv='
 
 document.addEventListener('click',e=>{if(e.target.closest('[data-sess]')){if(S.sess&&S.sess.d===day())sessGo();else sessStart()}});
 pick('free');renderLearn();sessBar();
-if('serviceWorker' in navigator&&location.hostname.endsWith('github.io')){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
+if('serviceWorker' in navigator&&(location.hostname.endsWith('github.io')||location.hostname==='localhost')){try{navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready).then(()=>setTimeout(pyOfflineNote,300))}catch(e){}}
+$('pyOff').addEventListener('click',pyPrefetch);pyOfflineNote();
+if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('controllerchange',pyOfflineNote);
