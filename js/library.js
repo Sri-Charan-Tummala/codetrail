@@ -227,3 +227,141 @@ pyauto:{lvl:'Python automation engineer: expected to write maintainable tools an
 ['Testing your tools','must','pytest, mocking, fixtures.',['a1','a2'],'2'],
 ['Packaging & CI','strong','Virtual envs, requirements, pipelines that test and publish.',['o19','o6'],'5'],
 ['Linux & scripting','strong','Bash one-liners and when to switch to Python.',['o10','o11','o16'],'1']]}};
+
+/* ---------- More guides ---------- */
+GUIDES.push(
+{id:'playbooks',cat:'Troubleshooting playbooks',title:'Production scenarios: step-by-step answers',sum:'The scenario questions SRE and DevOps loops love, with a calm order of steps.',body:`
+<h3>"The website is down"</h3><ol><li>Confirm and scope: is it everyone or some users, one region, one endpoint? Check the status page, synthetic checks, error-rate dashboards.</li><li>What changed? Recent deploys, config, certificates, DNS, infrastructure.</li><li>Mitigate: roll back, fail over, scale out, or switch off the feature.</li><li>Follow the request path: DNS → load balancer → app → dependencies (DB, cache, third parties). Look for the first failing hop.</li><li>Communicate on a schedule; postmortem afterwards.</li></ol>
+<h3>"Latency doubled since this morning"</h3><ol><li>Which percentile (p50 vs p99) and which endpoints?</li><li>Saturation: CPU, memory, connection pools, thread pools, queue depth.</li><li>Dependencies: slow DB queries (check slow-query log), cache hit rate dropped, a downstream timeout.</li><li>Traffic shape: a new client, a retry storm, a bot.</li><li>Fix the bottleneck, then add an alert on the symptom.</li></ol>
+<h3>"Database connections exhausted"</h3><ol><li>Who holds connections (pg_stat_activity / SHOW PROCESSLIST)? Long-running or idle-in-transaction sessions?</li><li>Did app instances scale out and multiply pool sizes?</li><li>Mitigate: kill stuck sessions, lower pool size per instance, add a pooler (PgBouncer).</li><li>Prevent: timeouts on queries and idle transactions, alerts at 80% of max connections.</li></ol>
+<h3>"A pod keeps getting OOMKilled"</h3><ol><li>kubectl describe → Last State: OOMKilled, exit code 137.</li><li>Compare real usage (kubectl top, metrics history) with the memory limit.</li><li>Leak or legitimate growth? Check the trend after restarts and heap profiles.</li><li>Right-size requests/limits, fix the leak, add a memory alert below the limit.</li></ol>
+<h3>"Deploy succeeded but users see errors"</h3><ol><li>Compare error rate before and after the rollout timestamp.</li><li>Roll back first if impact is real.</li><li>Then diff config, dependencies, feature flags and database migrations between versions.</li><li>Prevent: canary with automatic rollback on SLO breach.</li></ol>
+<h3>"Server unreachable over SSH"</h3><ol><li>Network: ping, route, security group / firewall, is port 22 open (nc -zv)?</li><li>Host: cloud console or serial console — is it out of disk, memory, or hung?</li><li>Auth: keys, user, sshd config, account locked.</li><li>Recover via console, fix, then automate the check.</li></ol>`},
+{id:'promql',cat:'Technical cheat sheets',title:'PromQL & alerting',sum:'The queries and alert rules interviewers ask you to write.',body:`
+<pre># request rate per service (counter → per-second)
+sum by (service) (rate(http_requests_total[5m]))
+
+# error ratio
+sum(rate(http_requests_total{code=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
+
+# 95th percentile latency from a histogram
+histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+
+# disk will be full within 4 hours
+predict_linear(node_filesystem_avail_bytes[6h], 4*3600) < 0
+
+# CPU busy %
+100 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100</pre>
+<pre># alert rule
+- alert: HighErrorRate
+  expr: sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+  for: 10m
+  labels: { severity: page }
+  annotations: { summary: "5xx above 2% for 10 minutes", runbook: "https://wiki/runbooks/high-errors" }</pre>
+<ul><li>Counters only go up — always wrap them in rate() or increase().</li><li>Keep label cardinality low (no user IDs in labels).</li><li>Page on symptoms users feel; ticket on causes.</li></ul>`},
+{id:'aws',cat:'Technical cheat sheets',title:'AWS core services in one page',sum:'What each service is for, and the classic interview angles.',body:`
+<table><tr><th>Need</th><th>Service</th><th>Interview angle</th></tr>
+<tr><td>Identity</td><td>IAM (users, roles, policies)</td><td>Roles over keys; explicit deny wins; least privilege</td></tr>
+<tr><td>Network</td><td>VPC, subnets, route tables, IGW, NAT, SG, NACL</td><td>Public vs private subnets; SG stateful, NACL stateless</td></tr>
+<tr><td>Compute</td><td>EC2, Auto Scaling, Lambda</td><td>Launch templates, health checks, cold starts</td></tr>
+<tr><td>Containers</td><td>ECR, ECS, EKS</td><td>Pod identity / IRSA, managed node groups</td></tr>
+<tr><td>Storage</td><td>S3, EBS, EFS</td><td>S3 classes, versioning, Object Lock; EBS is per-AZ</td></tr>
+<tr><td>Databases</td><td>RDS, Aurora, DynamoDB</td><td>Multi-AZ vs read replicas; backups and PITR</td></tr>
+<tr><td>Traffic</td><td>ELB (ALB/NLB), Route 53, CloudFront</td><td>L7 vs L4; health checks; DNS failover</td></tr>
+<tr><td>Observability</td><td>CloudWatch, CloudTrail, X-Ray</td><td>Metrics/logs vs who-did-what audit</td></tr>
+<tr><td>Secrets</td><td>Secrets Manager, KMS, SSM Parameter Store</td><td>Rotation; envelope encryption</td></tr>
+<tr><td>IaC & CI</td><td>CloudFormation, CodePipeline, CodeBuild</td><td>vs Terraform and GitHub Actions</td></tr></table>`},
+{id:'cicd',cat:'Technical cheat sheets',title:'CI/CD pipeline design reference',sum:'A pipeline you can draw and defend in any interview.',body:`
+<pre>commit → lint + unit tests → build artefact/image (once, tagged by commit SHA)
+       → security scans (SAST, dependencies, image) → integration tests
+       → publish to registry → deploy to staging (GitOps / pipeline)
+       → smoke + e2e tests → approval (if required)
+       → canary 5% → watch SLOs → 50% → 100%  (auto-rollback on breach)</pre>
+<ul><li><b>Build once, promote the same artefact</b> — never rebuild per environment.</li><li><b>Fast feedback</b>: cache dependencies, parallelise tests, fail fast on lint/unit.</li><li><b>Secrets</b>: from a vault or OIDC federation, never in the repo or logs.</li><li><b>Flaky tests</b>: quarantine with a ticket; track flakiness rate.</li><li><b>Database migrations</b>: backward-compatible (expand → migrate → contract) so rollback works.</li><li><b>Measure</b> (DORA): deployment frequency, lead time, change failure rate, time to restore.</li></ul>`},
+{id:'pytest',cat:'Technical cheat sheets',title:'pytest essentials',sum:'Fixtures, parametrize, mocking and hooks on one page.',body:`
+<pre>import pytest
+from unittest.mock import patch
+
+@pytest.fixture(scope="session")
+def api():
+    client = make_client()
+    yield client            # teardown runs after the yield
+    client.close()
+
+@pytest.mark.parametrize("size,expected", [(0, "0 B"), (1536, "1.5 KiB")])
+def test_human(size, expected):
+    assert human(size) == expected
+
+def test_timeout_is_retried(api):
+    with patch("app.client.requests.get", side_effect=[TimeoutError, ok_response()]) as g:
+        assert api.fetch("/x").status == 200
+    assert g.call_count == 2
+
+def test_raises():
+    with pytest.raises(ValueError, match="bad"):
+        parse("bad")</pre>
+<pre>pytest -k login -m "not slow" -x -vv       # select, stop at first failure
+pytest -n auto                              # parallel (pytest-xdist)
+pytest --junitxml=reports/junit.xml         # CI report
+# conftest.py hooks: pytest_addoption, pytest_collection_modifyitems, pytest_runtest_makereport</pre>`},
+{id:'bash',cat:'Technical cheat sheets',title:'Bash script template',sum:'Safe defaults and patterns for scripts you hand to others.',body:`
+<pre>#!/usr/bin/env bash
+set -euo pipefail                 # stop on errors, unset vars, failed pipes
+IFS=$'\\n\\t'
+trap 'echo "failed at line $LINENO" >&2' ERR
+trap 'rm -rf "$TMP"' EXIT
+TMP=$(mktemp -d)
+
+usage() { echo "usage: $0 -e env [-n]" >&2; exit 2; }
+DRY=0
+while getopts "e:n" opt; do
+  case $opt in e) ENV=$OPTARG ;; n) DRY=1 ;; *) usage ;; esac
+done
+: "$ENV"                          # fails if ENV is unset (set -u)
+
+log() { printf '%s %s\\n' "$(date -Is)" "$*"; }
+run() { if [ "$DRY" = 1 ]; then log "DRY: $*"; else "$@"; fi; }
+
+for host in $(cat "hosts.$ENV"); do
+  log "restarting on $host"
+  run ssh -o ConnectTimeout=5 "$host" sudo systemctl restart app
+done</pre>
+<ul><li>Quote variables: "$var".</li><li>Use $(...) not backticks; [[ ]] for tests.</li><li>Exit codes: 0 success, non-zero failure; check them.</li><li>Past ~50 lines or with data structures, switch to Python.</li></ul>`},
+{id:'sec',cat:'Technical cheat sheets',title:'Security essentials for DevOps/SRE',sum:'What security-minded interviewers expect you to say.',body:`
+<ul><li><b>Identity</b>: least privilege, roles not long-lived keys, MFA for humans, short-lived tokens (OIDC) for machines.</li><li><b>Secrets</b>: vault/secrets manager, rotation, never in Git, images or logs; scan repos for leaks.</li><li><b>Transport</b>: TLS everywhere, mTLS between services where trust matters, certificate expiry monitoring.</li><li><b>Supply chain</b>: pin dependencies, scan images and packages, sign artefacts, minimal base images.</li><li><b>Kubernetes</b>: RBAC, NetworkPolicies (default deny), Pod Security restricted, non-root, read-only root FS.</li><li><b>Data</b>: encryption at rest, backups with an immutable copy, tested restores.</li><li><b>Detect & respond</b>: audit logs (CloudTrail), alerting on risky changes, an incident process (NIST 800-61).</li><li><b>Web</b>: OWASP Top 10 — broken access control, injection (parameterised queries), misconfiguration.</li></ul>`},
+{id:'patterns',cat:'Interview playbooks',title:'Coding patterns: which tool for which problem',sum:'Recognise the pattern, then practise it with the drills in this app.',body:`
+<table><tr><th>If the problem says…</th><th>Reach for</th><th>Drills here</th></tr>
+<tr><td>count, frequency, duplicates, "seen before"</td><td>dict / Counter / set</td><td>Top k frequent, Dedupe, Anagram check</td></tr>
+<tr><td>contiguous window, "last N", rate</td><td>sliding window (two indices)</td><td>Busiest k minutes, Longest unique run, Busiest minute</td></tr>
+<tr><td>sorted input, pair/target</td><td>two pointers or binary search</td><td>Binary search, Two sum</td></tr>
+<tr><td>top/bottom k, merge streams</td><td>heap (heapq)</td><td>k slowest requests</td></tr>
+<tr><td>dependencies, order, "before"</td><td>topological sort (Kahn)</td><td>Deployment order</td></tr>
+<tr><td>shortest path, levels, hops</td><td>BFS with a queue</td><td>Fewest network hops</td></tr>
+<tr><td>nested structure</td><td>recursion or a stack</td><td>Flatten, Balanced brackets</td></tr>
+<tr><td>intervals, schedules</td><td>sort by start, then merge</td><td>Merge intervals</td></tr>
+<tr><td>recent-use eviction</td><td>OrderedDict</td><td>LRU cache</td></tr>
+<tr><td>parse text/logs</td><td>split, re, Counter</td><td>Top client IPs, Top error codes, Parse key=value, Mask secrets</td></tr></table>
+<p>Practise in Code → Drills with Interview mode on: no hints, timed.</p>`},
+{id:'stories',cat:'Interview playbooks',title:'Behavioural question → which story to use',sum:'One prepared story answers many questions.',body:`
+<table><tr><th>Question theme</th><th>Use your story</th></tr>
+<tr><td>Biggest achievement / proud of</td><td>A critical defect you caught</td></tr>
+<tr><td>Mistake / failure</td><td>A mistake you made</td></tr>
+<tr><td>Conflict / disagreement / influence</td><td>Product or setup? · Raised a risk early</td></tr>
+<tr><td>Ambiguity / changing requirements</td><td>A critical defect you caught (scope kept moving)</td></tr>
+<tr><td>Process improvement / automation</td><td>A process you automated · Your validation and automation work</td></tr>
+<tr><td>Customer focus</td><td>A customer-facing issue</td></tr>
+<tr><td>Learning fast / new team</td><td>Moved to a new team</td></tr>
+<tr><td>Going beyond your role / leadership</td><td>The BCP plan · Your patent application</td></tr>
+<tr><td>Why leave / why this role</td><td>Why this company, and why leave now?</td></tr></table>
+<p>Your drafts are in Prep → Stories; rehearse each with the 2-minute timer.</p>`},
+{id:'research',cat:'Interview playbooks',title:'Company research in 20 minutes',sum:'What to know before any interview, and where to find it.',body:`
+<ol><li><b>What they sell and to whom</b> — company site, latest annual report or investor page.</li><li><b>What the team does</b> — the job description, team blog, engineering talks.</li><li><b>Their stack</b> — job description keywords, engineering blog, GitHub.</li><li><b>Recent news</b> — last 3 months: launches, acquisitions, results.</li><li><b>Interview format</b> — the Companies tab here and candidate reports.</li><li><b>Your fit</b> — 3 requirements you match with proof, 1 gap and how you're closing it.</li><li><b>Your questions</b> — about the team's biggest challenge, on-call, how success is measured in 90 days.</li></ol>`},
+{id:'switch',cat:'Job switch (India)',title:'Resignation, notice and joining checklist',sum:'The non-technical steps that trip people up when switching jobs.',body:`
+<ol><li><b>Get the offer in writing</b> before resigning: role, level, CTC breakdown, joining date, location, notice/probation terms.</li><li><b>Resign in writing</b> (email to your manager, as your HR policy requires) and keep a copy. Stay professional.</li><li><b>Notice period</b>: ask about early release or buy-out; get any agreement in writing.</li><li><b>Knowledge transfer</b>: handover documents, scripts, open issues and contacts — protects your reputation and reference.</li><li><b>Documents to collect</b>: relieving letter, experience letter, last payslips, Form 16 (and Form 12B details for the new employer if you join mid-year).</li><li><b>Provident Fund</b>: keep the same UAN; check the transfer on the EPFO member portal after joining.</li><li><b>Background verification</b>: expect checks on employment dates, education and sometimes address; dates on your resume must match records.</li><li><b>Company assets and access</b>: return laptops and badges; don't copy company code or documents.</li></ol>`},
+{id:'gloss',cat:'Technical cheat sheets',title:'Glossary: 40 terms in one line each',sum:'Quick recall before a round.',body:`
+<ul><li><b>Idempotent</b>: doing it twice = doing it once.</li><li><b>Backoff with jitter</b>: retry after growing, randomised waits.</li><li><b>Circuit breaker</b>: stop calling a failing dependency for a while.</li><li><b>Bulkhead</b>: isolate resources so one failure doesn't sink all.</li><li><b>Toil</b>: manual, repetitive, automatable ops work.</li><li><b>SLI/SLO/SLA</b>: measure / target / contract.</li><li><b>Error budget</b>: allowed unreliability (1 − SLO).</li><li><b>MTTR</b>: mean time to restore.</li><li><b>Canary</b>: release to a small share first.</li><li><b>Blue-green</b>: switch traffic between two full environments.</li><li><b>Feature flag</b>: turn code paths on/off without deploying.</li><li><b>GitOps</b>: Git is the source of truth; an agent syncs the cluster.</li><li><b>Drift</b>: real infrastructure differs from code.</li><li><b>Immutable infrastructure</b>: replace, don't patch in place.</li><li><b>Sidecar</b>: helper container next to the app (proxy, log shipper).</li><li><b>Service mesh</b>: sidecars handling mTLS, retries, routing.</li><li><b>Ingress</b>: HTTP routing into a cluster.</li><li><b>Taint/toleration</b>: keep pods off nodes unless they tolerate it.</li><li><b>Affinity</b>: prefer/require pods on certain nodes or near others.</li><li><b>PDB</b>: limit how many pods can be down during maintenance.</li><li><b>HPA</b>: scale pod count on metrics.</li><li><b>etcd</b>: Kubernetes' state store.</li><li><b>CNI</b>: plugin that wires pod networking.</li><li><b>Cgroups / namespaces</b>: limit / isolate container resources and views.</li><li><b>OOM killer</b>: kernel kills a process when memory runs out.</li><li><b>Inode</b>: file metadata entry; can run out before space.</li><li><b>Load average</b>: runnable + waiting tasks over 1/5/15 min.</li><li><b>RPO / RTO</b>: data loss allowed / restore time allowed.</li><li><b>Dedup</b>: store identical chunks once.</li><li><b>Erasure coding</b>: data + parity across nodes, cheaper than copies.</li><li><b>Snapshot</b>: point-in-time view on the same system.</li><li><b>Immutable backup</b>: can't be changed or deleted until retention ends.</li><li><b>WAL / PITR</b>: write-ahead log / restore to any moment.</li><li><b>CAP</b>: under partition, choose consistency or availability.</li><li><b>Sharding</b>: split data across databases by key.</li><li><b>Read replica</b>: copy for scaling reads.</li><li><b>mTLS</b>: both sides present certificates.</li><li><b>OIDC federation</b>: short-lived cloud credentials for pipelines.</li><li><b>SBOM</b>: list of components in your software.</li><li><b>DORA metrics</b>: deploy frequency, lead time, change failure rate, time to restore.</li></ul>`}
+);
+DOCS.push(
+{cat:'More official references',items:[['DORA — State of DevOps research','https://dora.dev/','The four key delivery metrics and research behind them.'],['Kubernetes — Horizontal Pod Autoscaling','https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/','Including custom and external metrics.'],['KEDA — event-driven autoscaling','https://keda.sh/docs/','Scale on queues, Kafka lag, cron.'],['Prometheus — alerting rules','https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/','Writing alerts with for: and labels.'],['AWS IAM — policy evaluation logic','https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html','Implicit vs explicit deny.'],['OWASP Cheat Sheet Series','https://cheatsheetseries.owasp.org/','Practical secure-coding guidance.'],['SLSA — supply-chain security levels','https://slsa.dev/','Build integrity and provenance.'],['NetApp documentation','https://docs.netapp.com/','For storage-company interviews.'],['Commvault documentation','https://documentation.commvault.com/','Backup concepts as another vendor implements them.']]});
+FEED.push({d:`2026-11-21`,items:[`23 more reported interview questions — Commvault, NetApp, Cohesity, JPMorganChase, Deloitte, DTCC — each linked to its source; 4 new company guides.`,`12 more guides: production troubleshooting playbooks, PromQL & alerting, AWS core services, CI/CD design, pytest, Bash template, security essentials, coding patterns, behavioural-story map, company research, job-switch checklist, glossary.`]});

@@ -9,8 +9,8 @@ Plain HTML, CSS and JavaScript: no build step, no server, no accounts. Progress 
 - **Write-it-yourself tasks:** commands are checked automatically; explanations are self-scored against key points.
 - **48 drills (incl. 6 SQL)** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
 - **IDE:** several files that import each other, input and arguments, a built-in pytest runner, templates, and a .zip download.
-- **Q&A decks** with spaced repetition: 42 questions candidates report from real interviews (each linked to its source), concepts, behavioural, HR & offer, plus mock interviews and an incident simulator.
-- **Prep library:** a role-by-role syllabus (what a ~4-year engineer must know, mapped to lessons and weeks), 16 offline guides and cheat sheets, and 70+ official documentation links.
+- **Q&A decks** with spaced repetition: 65 questions candidates report from real interviews (each linked to its source), concepts, behavioural, HR & offer, plus mock interviews and an incident simulator.
+- **Prep library:** a role-by-role syllabus (what a ~4-year engineer must know, mapped to lessons and weeks), 28 offline guides, cheat sheets and playbooks, and 80+ official documentation links.
 - **Honest progress:** only active learning time counts; a focus timer for study outside the app; a 90-day calendar with per-day history; completed vs demonstrated skill.
 
 ## Project layout
