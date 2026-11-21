@@ -93,6 +93,10 @@
     <div class="panel" id="meWeak"></div>
     <div class="panel" id="apps"></div>
     <div class="panel" id="meTracks"></div>
+    <details class="panel" id="installHelp"><summary style="cursor:pointer;font-weight:700;min-height:28px">Install on your phone</summary>
+      <p class="note" style="margin:10px 0 6px"><b>iPhone</b> — open this page in Safari → tap <b>Share</b> (square with an arrow) → <b>Add to Home Screen</b> → <b>Add</b>. Open CodeTrail from the new icon.</p>
+      <p class="note" style="margin:0 0 6px"><b>Android</b> — open this page in Chrome → tap <b>⋮</b> → <b>Install app</b> or <b>Add to Home screen</b>. Open CodeTrail from the new icon.</p>
+      <p class="note" style="margin:0">Each phone and browser keeps its own progress: move it with <b>Download backup file</b> and <b>Restore from file</b> below. Python drills need internet the first time (about 10&nbsp;MB).</p></details>
     <div class="panel"><h3>Back up &amp; move devices</h3><p class="note" id="bkNote">Progress lives only in this browser. Download a backup file now and then — it includes your stories, IDE files and drill times. Restore it here or on another device.</p>
       <div class="btnrow" style="margin-bottom:10px"><button class="btn" id="bkDown">Download backup file</button><button class="btn ghost" id="bkUpBtn">Restore from file</button><input type="file" id="bkUp" accept=".json,application/json" hidden></div>
       <button class="btn ghost" id="exp">Copy progress code</button>

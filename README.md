@@ -30,9 +30,37 @@ tests/emulator/          end-to-end tests on an emulated iPhone with real Python
 Your job pipeline, resumes, story drafts and personal answers live in `js/personal.js`, which `.gitignore` keeps out of the repo.
 To set it up, copy `js/personal.example.js` to `js/personal.js` and fill it in. The app works without it.
 
-## Run it
-Open `index.html` in a browser, or serve the folder: `python3 -m http.server` → http://localhost:8000.
-To install on iPhone, open the hosted page in Safari → Share → Add to Home Screen.
+## Open it on your phone
+
+There are two ways. **A** has everything, including your personal data. **B** needs no Claude account, but personal data (pipeline, stories, answers) isn't included because `js/personal.js` isn't in the repo.
+
+### A. Your private Claude link (recommended)
+**iPhone**
+1. Open the CodeTrail link in **Safari** and sign in to Claude if asked.
+2. Tap **Share** (square with an arrow) → **Add to Home Screen** → **Add**.
+3. Open CodeTrail from the new icon.
+
+**Android**
+1. Open the CodeTrail link in **Chrome** and sign in to Claude if asked.
+2. Tap **⋮** (top right) → **Add to Home screen** (or **Install app**) → **Add**.
+3. Open CodeTrail from the new icon.
+
+You can also open the link inside the Claude app on either phone.
+
+### B. GitHub Pages (public, installable, works offline)
+One-time setup on github.com: **Settings → Pages → Build and deployment → Deploy from a branch → `main` / `/ (root)` → Save**.
+After a minute or two the app is live at **https://sri-charan-tummala.github.io/codetrail/**. (GitHub Pages needs a public repo on the free plan.)
+
+**iPhone:** open that address in **Safari** → **Share** → **Add to Home Screen** → **Add**. It opens full-screen like an app.
+**Android:** open it in **Chrome** → **⋮** → **Install app** (or **Add to Home screen**) → **Install**.
+
+After installing, the lessons work offline. Python drills and the IDE need internet the first time (about 10 MB).
+
+### Moving your progress between phones or browsers
+Each browser and each home-screen app keeps its own progress. On the old one go to **Progress → Download backup file**, then on the new one use **Progress → Restore from file**. **Copy progress code** and **Import** do the same through the clipboard.
+
+## Run it on a computer
+Open `index.html` in a browser, or serve the folder with `python3 -m http.server` and go to http://localhost:8000.
 
 ## Tests
 See [tests/emulator/README.md](tests/emulator/README.md).
