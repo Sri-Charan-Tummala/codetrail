@@ -7,7 +7,7 @@ Plain HTML, CSS and JavaScript: no build step, no server, no accounts. Progress 
 - **8 tracks, 82 lessons:** Python · DevOps/SRE (incl. CKA-level Kubernetes) · Automation · Concepts · Storage · Security (CompTIA Security+ SY0-701 domains) · Cloud (AWS) · Real-world outages.
 - **Every question explained:** a full walkthrough, plus why each wrong option is wrong.
 - **Write-it-yourself tasks:** commands are checked automatically; explanations are self-scored against key points.
-- **38 drills (incl. 6 SQL)** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
+- **48 drills (incl. 6 SQL)** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
 - **IDE:** several files that import each other, input and arguments, a built-in pytest runner, templates, and a .zip download.
 - **Q&A decks** with spaced repetition: 42 questions candidates report from real interviews (each linked to its source), concepts, behavioural, HR & offer, plus mock interviews and an incident simulator.
 - **Prep library:** a role-by-role syllabus (what a ~4-year engineer must know, mapped to lessons and weeks), 16 offline guides and cheat sheets, and 70+ official documentation links.

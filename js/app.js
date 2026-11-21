@@ -280,12 +280,14 @@ function renderCard(){
 /* mock interview */
 function mockPick(){
   $('deckF').hidden=true;
-  $('deck').innerHTML=`<div class="qa"><h2>Mock interview</h2><p>Five questions for one role, two minutes each. Answer out loud, then compare with the model answer and score yourself honestly.</p>${ROLES.map(r=>`<button class="btn ghost" data-mock="${r.id}">${esc(r.name)}</button>`).join('')}<button class="back" id="mockExit">← Back to cards</button></div>`;
+  $('deck').innerHTML=`<div class="qa"><h2>Mock interview</h2><p><b>Quick mock:</b> five questions for one role, two minutes each. <b>Full loop:</b> eight questions like a real loop — a reported question, three technical, a design question, a behavioural, an HR question and your story — then one coding drill in interview mode. Answer out loud, compare with the model answer and score yourself honestly.</p>${ROLES.map(r=>`<div class="btnrow" style="margin-bottom:8px"><button class="btn ghost sm" data-mock="${r.id}">${esc(r.name)} · quick</button><button class="btn sm" data-mockfull="${r.id}">Full loop</button></div>`).join('')}<button class="back" id="mockExit">← Back to cards</button></div>`;
 }
-function mockStart(rid){
-  const r=ROLES.find(x=>x.id===rid),pool=shuffle(CARDS.filter(c=>r.decks.includes(c.tr)&&c.tr!=='beh'));
-  const beh=shuffle(CARDS.filter(c=>c.tr==='beh'));
-  mock={r,qs:pool.slice(0,4).concat(beh.slice(0,1)),i:0,sc:[],shown:false};mockQ();
+function mockStart(rid,full){
+  const r=ROLES.find(x=>x.id===rid),pool=shuffle(CARDS.filter(c=>r.decks.includes(c.tr)&&!['beh','hr','you','rep'].includes(c.tr)));
+  const pick=tr=>shuffle(CARDS.filter(c=>c.tr===tr)).slice(0,1),beh=pick('beh');
+  if(full){const design=shuffle(CARDS.filter(c=>c.tr==='con'&&/design|architect|scale|reliab/i.test(c.q))).slice(0,1);
+    const qs=[...pick('rep'),...pool.slice(0,3),...design,...beh,...pick('you'),...pick('hr')];mock={r,qs,i:0,sc:[],shown:false,full:true};mockQ();return}
+  mock={r,qs:pool.slice(0,4).concat(beh),i:0,sc:[],shown:false};mockQ();
 }
 function mockQ(){
   if(mockT){clearInterval(mockT);mockT=null}
@@ -297,9 +299,9 @@ function mockQ(){
 }
 function mockEnd(){
   const m=mock,tot=m.sc.reduce((a,b)=>a+b,0),pct=Math.round(tot/(m.qs.length*2)*100);
-  S.mocks=(S.mocks||[]).concat([{d:day(),r:m.r.id,p:pct}]).slice(-50);logItem('mock',`Mock interview (${m.r.name}): ${pct}%`);S.xp+=5;bump();save();head();
+  S.mocks=(S.mocks||[]).concat([{d:day(),r:m.r.id,p:pct,f:!!m.full}]).slice(-50);logItem('mock',`${m.full?'Full-loop':'Mock'} interview (${m.r.name}): ${pct}%`);S.xp+=5;bump();save();head();
   const lab=[`Missed`,`Partly`,`Nailed`];
-  $('deck').innerHTML=`<div class="qa"><span class="note">Mock · ${esc(m.r.name)}</span><h2>Score ${pct}%</h2><p>${pct>=80?'Interview-ready on these topics.':pct>=50?'Good base — review the ones you missed.':'Worth another pass this week.'} Missed and partial answers are now due for review.</p><ul style="margin:0;padding-left:18px">${m.qs.map((c,i)=>`<li style="margin-bottom:6px">${lab[m.sc[i]]} — ${esc(c.q)}</li>`).join('')}</ul><button class="btn" id="mockAgain">Another mock</button><button class="back" id="mockExit">Back to cards</button></div>`;
+  $('deck').innerHTML=`<div class="qa"><span class="note">Mock · ${esc(m.r.name)}</span><h2>Score ${pct}%</h2><p>${pct>=80?'Interview-ready on these topics.':pct>=50?'Good base — review the ones you missed.':'Worth another pass this week.'} Missed and partial answers are now due for review.</p><ul style="margin:0;padding-left:18px">${m.qs.map((c,i)=>`<li style="margin-bottom:6px">${lab[m.sc[i]]} — ${esc(c.q)}</li>`).join('')}</ul>${m.full?'<p style="margin:12px 0 0"><b>Last round: coding.</b> Solve one medium drill in interview mode — aim for under 25 minutes, talking through your approach.</p><button class="btn" id="mockDrill">Start the coding round</button>':''}<button class="btn ghost" id="mockAgain">Another mock</button><button class="back" id="mockExit">Back to cards</button></div>`;
   mock=null;
 }
 $('mockBtn').addEventListener('click',()=>{if(mockT){clearInterval(mockT);mockT=null}mock=null;mockPick()});
@@ -309,6 +311,8 @@ $('deck').addEventListener('click',e=>{
   if(id==='mockExit'||id==='again'){buildDeck();return}
   if(id==='mockAgain'){mockPick();return}
   const mk=e.target.closest('[data-mock]');if(mk){mockStart(mk.dataset.mock);return}
+  const mf=e.target.closest('[data-mockfull]');if(mf){mockStart(mf.dataset.mockfull,true);return}
+  if(e.target.id==='mockDrill'){const meds=CHAL.filter(c=>c.id!=='free'&&(c.diff||DIFF[c.id])==='medium'),un=meds.filter(c=>!S.done['ch_'+c.id]),c=shuffle(un.length?un:meds)[0];S.imode=true;save();show('play');codeMode('drills');pick(c.id);return}
   if(id==='mockReveal'){mock.shown=true;mockQ();return}
   const ms=e.target.closest('[data-ms]');if(ms&&mock){const s=+ms.dataset.ms,c=mock.qs[mock.i];mock.sc.push(s);rate(c.k,s===2?'got':s===1?'hard':'again');mark('cards');save();mock.i++;mock.shown=false;mockQ();return}
   if(id==='reveal'){shown=true;renderCard()}
