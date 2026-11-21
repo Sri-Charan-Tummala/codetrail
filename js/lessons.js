@@ -692,3 +692,158 @@ aws cloudwatch put-metric-alarm --alarm-name api-5xx --metric-name 5XXError ...`
 ]}
 
 };
+
+/* ---------- Added lessons: interview essentials ---------- */
+const MN=(q,code,opts,a,why,no)=>Object.assign(M(q,code,opts,a,why),{no});
+TRACKS.ops.lessons.push(
+{id:'o16',u:`Linux & networking`,title:`Processes, signals & systemd`,ref:[[`systemd.service manual`,`https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html`],[`signal(7) — Linux manual`,`https://man7.org/linux/man-pages/man7/signal.7.html`]],steps:[
+Lr(`Processes and signals`,`Every process has a PID and a parent. Signals are how you talk to it: <b>SIGTERM (15)</b> asks it to stop cleanly, <b>SIGKILL (9)</b> stops it instantly and can't be caught, <b>SIGHUP</b> often means "reload config", <b>SIGINT</b> is Ctrl+C. A <b>zombie</b> has exited but its parent hasn't collected its exit status; an <b>orphan</b> is adopted by PID 1.`,`ps -ef --forest           # who started whom
+kill -TERM 4321           # polite stop
+sleep 10; kill -0 4321 && kill -KILL 4321   # force only if still alive
+ps -eo pid,stat,cmd | awk '$2 ~ /Z/'        # zombies`),
+Lr(`systemd in one screen`,`systemd starts and supervises services. A unit file says how to run it; <code>Restart=on-failure</code> brings it back after a crash. After editing a unit, run <code>daemon-reload</code>. Logs live in the journal.`,`systemctl status app        # state + last log lines
+systemctl enable --now app  # start now and at boot
+journalctl -u app -f --since "10 min ago"
+
+# /etc/systemd/system/app.service
+[Service]
+ExecStart=/opt/app/run
+Restart=on-failure
+User=app`),
+MN(`A service won't stop and you need it gone, cleanly if possible. Best order?`,'',[`kill -9 straight away`,`SIGTERM, wait a few seconds, then SIGKILL only if it's still running`,`Reboot the server`,`Delete the binary`],1,`SIGTERM lets it flush data and release locks; SIGKILL is the last resort because the process gets no chance to clean up.`,[`SIGKILL skips cleanup — files and locks can be left half-written.`,'',`A reboot takes everything down for one process.`,`Deleting the file doesn't stop the running process.`]),
+MN(`ps shows several processes in state Z. What are they?`,'',[`Zombies: they exited, but the parent hasn't collected their exit status`,`Processes using too much CPU`,`Processes swapped out to disk`,`Processes waiting on disk I/O`],0,`Zombies use no CPU or memory, only a PID slot. Fix the parent (or restart it) so it reaps its children.`,['',`High CPU shows as R (running), not Z.`,`Swapping isn't shown as a process state letter.`,`Waiting on I/O is state D (uninterruptible sleep).`]),
+F(`Follow a service's logs live, starting 10 minutes ago`,`journalctl -u nginx ___ --since "10 min ago"`,[`-f`,`-x`,`-k`,`-r`],[`-f`],`-f follows new lines like tail -f; -k is kernel messages only and -r reverses the order.`),
+MN(`You edited /etc/systemd/system/app.service. What must you run before a restart picks up the change?`,'',[`systemctl daemon-reload`,`systemctl enable app`,`journalctl --vacuum-time=1d`,`Nothing — it's read on every restart`],0,`systemd caches unit files; daemon-reload makes it re-read them.`,['',`enable only sets start-at-boot; it doesn't reload the edited file.`,`That trims old logs.`,`systemd keeps the old definition until you reload.`])]},
+{id:'o17',u:`Linux & networking`,title:`TLS & certificates in practice`,ref:[[`OpenSSL s_client manual`,`https://docs.openssl.org/master/man1/openssl-s_client/`],[`Let's Encrypt — how it works`,`https://letsencrypt.org/how-it-works/`]],steps:[
+Lr(`The certificate chain`,`A server presents its <b>leaf</b> certificate plus any <b>intermediate</b> certificates; the client trusts it if the chain ends at a <b>root</b> in its trust store. The hostname must appear in the certificate's <b>Subject Alternative Name (SAN)</b>, and today's date must be inside the validity dates. Most TLS failures are one of those three.`,`openssl s_client -connect app.example.com:443 -servername app.example.com -showcerts
+openssl x509 -in cert.pem -noout -subject -issuer -dates -ext subjectAltName`),
+Lr(`Getting and rotating certificates`,`Generate a private key and a CSR (with the right SANs), have a CA sign it, then install the leaf with its chain. Self-signed certificates are fine for labs but every client must import them explicitly. Java uses keystores (JKS/PKCS#12); some IBM products use GSKit key databases. In production, monitor expiry and automate renewal (ACME, cert-manager).`,`openssl req -new -newkey rsa:3072 -nodes -keyout app.key -out app.csr \\
+  -subj "/CN=app.example.com" -addext "subjectAltName=DNS:app.example.com,DNS:api.example.com"
+keytool -importcert -alias corp-ca -file ca.pem -keystore truststore.p12`),
+MN(`The site works in a browser, but curl and your Java client fail with "unable to get local issuer certificate". Most likely cause?`,'',[`The server isn't sending its intermediate certificate`,`The private key password is wrong`,`Port 443 is blocked`,`The client's clock is a year ahead`],0,`Browsers often fetch or cache missing intermediates; curl and Java don't. Configure the server to send the full chain.`,['',`A key password problem stops the server starting, not the client verifying.`,`A blocked port gives a connection error, not an issuer error.`,`A wrong clock gives "certificate has expired" or "not yet valid".`]),
+MN(`The certificate is for app.example.com, but users connect to api.example.com and get a name mismatch. Proper fix?`,'',[`Reissue the certificate with api.example.com in the SAN`,`Turn off certificate verification in clients`,`Lower the DNS TTL`,`Restart the web server`],0,`The hostname must be in the SAN list. Disabling verification removes the protection TLS exists for.`,['',`That makes every client vulnerable to impersonation.`,`DNS isn't the problem — the name in the certificate is.`,`A restart serves the same certificate.`]),
+F(`Show a certificate's validity dates`,`openssl x509 -in cert.pem -noout ___`,[`-dates`,`-text`,`-pubkey`,`-hash`],[`-dates`],`-dates prints notBefore and notAfter; -text prints everything.`),
+MN(`Best way to prevent outages from expired certificates?`,'',[`Monitor expiry with alerts well ahead (e.g. 30/14/7 days) and automate renewal`,`Buy 10-year certificates`,`A calendar reminder for one person`,`Use self-signed certificates everywhere`],0,`Automation plus alerting removes the human single point of failure. Public CAs no longer issue very long certificates.`,['',`Public CAs won't issue them, and long lifetimes make key compromise worse.`,`People change roles and go on leave — this is how expiries get missed.`,`Every client would then need manual trust changes.`])]},
+{id:'o18',u:`Delivery & reliability`,title:`Ansible essentials`,ref:[[`Ansible documentation — getting started`,`https://docs.ansible.com/ansible/latest/getting_started/index.html`]],steps:[
+Lr(`Agentless configuration`,`Ansible connects over SSH, so there's nothing to install on targets. An <b>inventory</b> lists hosts and groups; a <b>playbook</b> lists tasks; each task calls a <b>module</b> that is idempotent — run it twice and the second run changes nothing. <b>Handlers</b> run only when notified by a change.`,`- hosts: web
+  become: true
+  tasks:
+    - name: nginx installed
+      package: { name: nginx, state: present }
+    - name: config deployed
+      template: { src: nginx.conf.j2, dest: /etc/nginx/nginx.conf }
+      notify: restart nginx
+  handlers:
+    - name: restart nginx
+      service: { name: nginx, state: restarted }`),
+Lr(`Running it safely`,`Preview with <code>--check --diff</code>, limit blast radius with <code>--limit</code>, and keep secrets in <b>ansible-vault</b> or a secrets manager. Group shared tasks into <b>roles</b>; put per-environment values in group_vars and host_vars.`,`ansible-playbook site.yml -i inventory/prod --check --diff --limit web01
+ansible web -i inventory/prod -m ping
+ansible-vault encrypt group_vars/prod/secrets.yml`),
+MN(`Why use Ansible's package/template/service modules instead of the shell module?`,'',[`Modules are idempotent and report "changed" or "ok"; shell commands run every time`,`Shell is slower to type`,`Modules need an agent on the target`,`There's no real difference`],0,`Idempotence is the point: re-running a playbook should be safe and show real drift.`,['',`Typing speed isn't the concern; safe re-runs are.`,`Ansible is agentless either way.`,`Shell tasks always report "changed" and can break on re-run.`]),
+MN(`How do you dry-run a playbook and see what would change?`,'',[`--check --diff`,`--verbose`,`--list-hosts`,`--syntax-check`],0,`--check predicts changes without making them; --diff shows file differences.`,['',`Verbose shows more output while still making changes.`,`That only lists which hosts would be targeted.`,`That checks YAML syntax, not what would change.`]),
+F(`Restart nginx only when its config actually changed`,`tasks:
+  - template: { src: nginx.conf.j2, dest: /etc/nginx/nginx.conf }
+    notify: restart nginx
+___:
+  - name: restart nginx
+    service: { name: nginx, state: restarted }`,[`handlers`,`tasks`,`vars`,`roles`],[`handlers`],`Handlers run once at the end of the play, and only if a task notified them.`),
+MN(`Where should a database password used by a playbook live?`,'',[`Encrypted with ansible-vault, or fetched from a secrets manager`,`In the playbook in plain text`,`In the inventory file`,`In a code comment`],0,`Anything in plain text in Git is effectively public to everyone with repo access.`,['',`Plain text in Git leaks through history forever.`,`Inventories are committed too.`,`Comments are still in the file.`])]},
+{id:'o19',u:`Delivery & reliability`,title:`Jenkins & GitHub Actions pipelines`,ref:[[`Jenkins — Pipeline syntax`,`https://www.jenkins.io/doc/book/pipeline/syntax/`],[`GitHub Actions — workflow syntax`,`https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions`]],steps:[
+Lr(`Jenkins declarative pipelines`,`A <b>Jenkinsfile</b> lives in the repo: an agent, ordered <b>stages</b>, and a <b>post</b> block that runs after them. Credentials are injected at run time, never committed.`,`pipeline {
+  agent { label 'linux' }
+  stages {
+    stage('Build') { steps { sh 'make build' } }
+    stage('Test')  { steps { sh 'pytest --junitxml=reports/junit.xml' } }
+  }
+  post { always { junit 'reports/*.xml' } }
+}`),
+Lr(`GitHub Actions`,`A workflow runs <b>on</b> events (push, pull_request, schedule). <b>Jobs</b> run on runners; <b>steps</b> either <code>uses</code> an action or <code>run</code>s a command. A <b>matrix</b> fans one job out across versions. Use OIDC to get short-lived cloud credentials instead of storing keys.`,`on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { python: ["3.9", "3.12"] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: \${{ matrix.python }}, cache: pip }
+      - run: pip install -r requirements.txt && pytest`),
+MN(`You need the same tests to run on Python 3.9, 3.10, 3.11 and 3.12 in GitHub Actions. Cleanest way?`,'',[`A strategy.matrix over the versions`,`Four copies of the workflow file`,`A bash loop inside one step`,`needs: between four jobs`],0,`A matrix runs the versions in parallel from one definition and reports each separately.`,['',`Copies drift apart and are painful to maintain.`,`One step means one result — you lose per-version reporting and parallelism.`,`needs: orders jobs; it doesn't create versions.`]),
+MN(`Every build spends minutes downloading the same dependencies. Best fix?`,'',[`Cache dependencies keyed on a hash of the lockfile`,`Only use a bigger runner`,`Skip the tests`,`Build less often`],0,`The cache is reused until the lockfile changes, so builds stay fast and correct.`,['',`More CPU doesn't fix network downloads.`,`Speed bought by skipping tests isn't worth it.`,`Fewer builds means slower feedback.`]),
+F(`Publish test results even when tests fail`,`post {
+  ___ { junit 'reports/*.xml' }
+}`,[`always`,`success`,`failure`,`never`],[`always`],`always runs whatever the outcome — you most need the report when tests fail.`),
+MN(`A flaky test fails about 1 build in 10 and blocks releases. Best response?`,'',[`Quarantine it with a tracked ticket and fix the root cause, keeping it visible`,`Add unlimited automatic retries`,`Delete the test`,`Ignore the failures`],0,`Quarantine protects the pipeline without hiding the problem; unlimited retries hide real bugs.`,['',`Retries mask genuine intermittent bugs.`,`You lose the coverage it gave.`,`The team stops trusting a red pipeline.`])]}
+);
+TRACKS.con.lessons.push(
+{id:'k14',u:`How things work: Systems design`,title:`Design: a backup & restore service`,ref:[[`NIST SP 800-209 — Security guidelines for storage infrastructure`,`https://csrc.nist.gov/pubs/sp/800/209/final`]],steps:[
+Lr(`Start from the requirements`,`Ask first: how much data, how fast it changes, the <b>RPO</b> (how much loss is acceptable), the <b>RTO</b> (how fast to restore), retention, and restore granularity (single file, VM, whole site). Then the shape: <b>agents</b> on clients send data to a <b>server</b> that keeps a <b>catalog</b> (a database of what's stored where) and writes to <b>storage pools</b> — disk, object storage or tape — with deduplication, plus a copy at a second site.`,`clients/agents ──► backup server ──► catalog DB (metadata)
+                        │
+                        ├─► dedup storage pool (disk / object)
+                        ├─► replica at site B  (or immutable object copy)
+                        └─► tape for long retention`),
+Lr(`Sizing and the parts people forget`,`Throughput is simple maths: 50 TB with 2% daily change is 1 TB a night; in an 8-hour window that's about 35 MB/s. <b>Incremental-forever</b> moves only changes and builds restore points on the server. The <b>catalog</b> is the crown jewel — back it up and replicate it, or the data can't be found. Keep one copy <b>immutable</b> against ransomware, and prove it all with scheduled restore tests.`,`daily change = 50 TB × 2% = 1 TB
+throughput   = 1,000,000 MB ÷ (8 × 3600 s) ≈ 35 MB/s`),
+MN(`Which single component of a backup system most needs its own protection?`,'',[`The catalog / metadata database — without it the stored data can't be found`,`The web console`,`The client agents`,`The log files`],0,`Lose the catalog and you have terabytes of chunks nobody can map back to files.`,['',`The console can be reinstalled.`,`Agents can be redeployed.`,`Logs help diagnosis but don't hold the data map.`]),
+MN(`50 TB is protected, 2% changes daily, and the backup window is 8 hours. Roughly what throughput do incrementals need?`,'',[`About 35 MB/s`,`About 350 MB/s`,`About 3.5 MB/s`,`About 1.7 GB/s`],0,`1 TB ÷ 28,800 s ≈ 35 MB/s. State the maths out loud in an interview.`,['',`That's ten times too high — check the units.`,`That's ten times too low.`,`That would back up the whole 50 TB each night.`]),
+F(`Make the off-site copy ransomware-resistant`,`copy backups to S3 with ___ Lock in compliance mode`,[`Object`,`File`,`Table`,`Row`],[`Object`],`S3 Object Lock in compliance mode stops anyone — even admins — deleting copies before retention ends.`),
+MN(`Why prefer incremental-forever over weekly full backups?`,'',[`Less data is moved and stored each day; the server builds restore points from the pieces`,`Full backups aren't allowed`,`Restores are always faster`,`It removes the need for a catalog`],0,`It shrinks the window and the storage; the trade-off is depending on the catalog and server-side processing.`,['',`Fulls are allowed — just expensive.`,`Restore speed depends on the design, not only the schedule.`,`It depends on the catalog even more.`])]},
+{id:'k15',u:`How things work: Systems design`,title:`Design: a rate limiter`,ref:[[`IETF RFC 6585 — 429 Too Many Requests`,`https://www.rfc-editor.org/rfc/rfc6585`]],steps:[
+Lr(`Algorithms`,`<b>Token bucket</b>: a bucket holds up to N tokens and refills at R per second; each request takes one, so short bursts are allowed but the average stays at R. <b>Fixed window</b> counts per minute — simple, but allows double bursts at boundaries. <b>Sliding window</b> smooths that out. Rejected requests get <b>429</b> with a Retry-After header.`,`tokens = min(capacity, tokens + rate * elapsed)
+if tokens >= 1: tokens -= 1; allow
+else: reject with 429 + Retry-After`),
+Lr(`Making it distributed`,`With several API servers, keep counters in a shared fast store such as Redis, using atomic operations (INCR with EXPIRE, or a small Lua script) so two servers can't both let the 101st request through. Put the limiter at the gateway, key it by user or API key, and fail open or closed deliberately.`,`MULTI
+INCR rate:user42:202611211305
+EXPIRE rate:user42:202611211305 60
+EXEC`),
+MN(`Allow bursts of up to 20 requests but an average of 5 per second. Which algorithm?`,'',[`Token bucket: capacity 20, refill 5 per second`,`Fixed window of 5 per second`,`No limiter, just autoscaling`,`A queue with no limit`],0,`Capacity sets the burst; refill rate sets the average.`,['',`A 5-per-second window rejects the burst you wanted to allow.`,`Autoscaling doesn't protect downstream systems or stop abuse.`,`An unbounded queue just delays the failure.`]),
+MN(`What's the main weakness of a fixed-window limiter?`,'',[`Up to twice the limit can get through around a window boundary`,`It uses too much memory`,`It can't count requests`,`It needs machine learning`],0,`100 requests at 12:00:59 and 100 more at 12:01:00 both pass.`,['',`It's actually the cheapest in memory.`,`Counting is all it does.`,`It's a simple counter.`]),
+F(`Status code for a rate-limited request`,`HTTP ___ Too Many Requests`,[`429`,`503`,`403`,`413`],[`429`],`429 is defined for rate limiting; send Retry-After so clients back off.`),
+MN(`Five API servers must share one limit per user. Where do the counters live?`,'',[`In a shared fast store such as Redis, updated atomically`,`In each server's memory`,`On the client`,`In a text file on one server`],0,`A shared atomic counter gives one consistent limit across servers.`,['',`Each server would allow the full limit — five times too much.`,`Clients can't be trusted to limit themselves.`,`Slow, and a single point of failure.`])]}
+);
+TRACKS.auto.lessons.push(
+{id:'a9',u:`Frameworks`,title:`System & integration testing at scale`,ref:[[`ISTQB glossary`,`https://glossary.istqb.org/`]],steps:[
+Lr(`What system testing adds`,`Unit and feature tests check pieces. <b>System verification</b> checks the whole product the way customers run it: <b>integration</b> across components and platforms, <b>workload</b> under realistic load, <b>resiliency</b> when something fails, <b>scalability</b> as load grows, and <b>endurance (soak)</b> over hours or days. Agree entry and exit criteria up front.`,`entry:  build installed, environments ready, certs/keys in place, feature tests passed
+exit:   planned scenarios run, no open blocker/critical defects, results reviewed and signed off`),
+Lr(`Designing workloads and failures`,`Make data realistic (sizes, file counts, change rate), add concurrency, and ramp up. Inject failures on purpose — kill a process, fill a disk, drop the network, expire a certificate — then verify recovery. When something fails, line up client, server and infrastructure evidence on one timeline before naming an owner.`,`for cycle in range(N):
+    generate_changes(files=10_000, modify=0.2, delete=0.05)
+    run_incremental_backup(nodes=20)
+    record(metrics(), errors(), duration())`),
+MN(`What does a soak (endurance) test mainly catch?`,'',[`Leaks and slow degradation that only appear over hours or days`,`Syntax errors`,`Spelling mistakes in the UI`,`Bugs in a single function`],0,`Memory leaks, growing queues, log or disk growth and slow drifts need time to show.`,['',`The build or linters catch those.`,`UI reviews catch those.`,`Unit tests catch those faster.`]),
+MN(`Backups fail during a high-load run. Is it the product or the hardware? First step?`,'',[`Correlate client, server and hardware logs on one timeline`,`File it as a product bug`,`Re-run until it passes`,`Replace the hardware`],0,`Evidence first, then the owner — it saves days of the wrong team chasing it.`,['',`It may be infrastructure; the wrong owner wastes time.`,`Re-running hides intermittent faults.`,`Guessing costs money and time.`]),
+F(`A test that checks behaviour while a dependency is down`,`This is ___ testing.`,[`resiliency`,`unit`,`smoke`,`usability`],[`resiliency`],`Resiliency (or failure) testing checks degradation and recovery when parts fail.`),
+MN(`Which belongs in exit criteria for a release-quality system test cycle?`,'',[`No open blocker or critical defects, planned scenarios executed, results reviewed`,`Every test green on the first run`,`100% code coverage`,`No defect ever found`],0,`Exit criteria are about risk and coverage, not perfection.`,['',`Re-runs after fixes are normal; first-run green isn't the bar.`,`Coverage is a unit-level metric and never 100% in practice.`,`Finding defects is the point of testing.`])]}
+);
+TRACKS.py.lessons.push(
+{id:'p8',u:`Design`,title:`asyncio, typing & dataclasses`,ref:[[`Python docs — asyncio`,`https://docs.python.org/3/library/asyncio.html`],[`Python docs — dataclasses`,`https://docs.python.org/3/library/dataclasses.html`]],steps:[
+Lr(`asyncio for I/O-bound work`,`<code>async def</code> functions return coroutines; <code>await</code> pauses one while others run. <code>asyncio.gather</code> runs many at once; a <b>Semaphore</b> caps concurrency so you don't flood a server. Never call blocking functions like time.sleep inside a coroutine.`,`import asyncio
+sem = asyncio.Semaphore(10)
+
+async def fetch(i):
+    async with sem:              # at most 10 at a time
+        await asyncio.sleep(0.1)  # stand-in for an HTTP call
+        return i
+
+async def main():
+    results = await asyncio.gather(*(fetch(i) for i in range(100)))
+    print(len(results))
+
+asyncio.run(main())`),
+Lr(`dataclasses and type hints`,`<code>@dataclass</code> writes __init__, __repr__ and __eq__ for you; <code>frozen=True</code> makes instances immutable. Mutable defaults need <code>field(default_factory=list)</code>. Type hints document intent and are checked by tools like mypy — Python itself doesn't enforce them at runtime.`,`from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass(frozen=True)
+class Host:
+    name: str
+    port: int = 22
+    tags: tuple[str, ...] = ()
+
+@dataclass
+class Job:
+    id: int
+    hosts: list[Host] = field(default_factory=list)
+    owner: Optional[str] = None`),
+MN(`Run 100 HTTP calls concurrently with asyncio, but at most 10 at a time. How?`,'',[`Wrap each call in an asyncio.Semaphore(10)`,`Call time.sleep between calls`,`Use threading.Lock`,`Await each call in a for loop`],0,`The semaphore lets ten in and makes the rest wait their turn.`,['',`time.sleep blocks the whole event loop.`,`A thread lock doesn't coordinate coroutines.`,`That runs them one at a time.`]),
+MN(`What happens with: @dataclass class C: items: list = []`,'',[`ValueError — use field(default_factory=list)`,`It works fine`,`All instances silently share one list`,`SyntaxError`],0,`dataclasses refuse mutable defaults to save you from the shared-list bug.`,['',`dataclasses reject it when the class is defined.`,`That's the bug a plain class default would cause — dataclasses stop it.`,`The syntax is valid; it's a ValueError.`]),
+F(`Wait for all the coroutines and collect their results`,`results = await asyncio.___(*tasks)`,[`gather`,`run`,`sleep`,`wait_for`],[`gather`],`gather runs them concurrently and returns results in order; asyncio.run starts the loop.`),
+MN(`Are Python type hints enforced at runtime?`,'',[`No — tools like mypy check them; the interpreter ignores them`,`Yes, always`,`Only from Python 3.12`,`Only for int and str`],0,`Hints are metadata. Use mypy or pydantic when you need checking.`,['',`Python stores them but doesn't check calls against them.`,`No version enforces them.`,`No type is enforced.`])]}
+);

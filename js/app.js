@@ -229,7 +229,7 @@ function rate(k,res){const v=cst(k)||{box:0,due:day()};let box=v.box;if(res==='g
   if(res==='got')box=Math.min(box+1,IV.length-1);else if(res==='again')box=0;
   S.cards[k]={box,due:day(res==='got'?IV[box]:res==='again'?0:1)}}
 let deckF='all',deck=[],di=0,shown=false,mock=null,mockT=null;
-const FILT=[['due','Due today'],['all','All'],['you','Your story'],['aws','AWS'],['rep','Reported'],['con','Concepts'],['sto','Storage'],['sec','Security'],['py','Python'],['ops','DevOps'],['auto','Automation'],['scn','Scenarios'],['beh','Behavioural'],['again','Needs review']];
+const FILT=[['due','Due today'],['all','All'],['you','Your story'],['aws','AWS'],['rep','Reported'],['con','Concepts'],['sto','Storage'],['sec','Security'],['py','Python'],['ops','DevOps'],['auto','Automation'],['scn','Scenarios'],['beh','Behavioural'],['hr','HR & offer'],['again','Needs review']];
 const dueN=()=>CARDS.filter(c=>isDue(c.k)).length;
 function buildDeck(){
   mock=null;if(mockT){clearInterval(mockT);mockT=null}

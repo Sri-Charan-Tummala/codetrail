@@ -4,12 +4,12 @@ A phone-friendly interview-prep app for Platform/SRE, DevOps, storage, security 
 Plain HTML, CSS and JavaScript: no build step, no server, no accounts. Progress stays in your browser.
 
 ## What's inside
-- **8 tracks, 68 lessons:** Python · DevOps/SRE (incl. CKA-level Kubernetes) · Automation · Concepts · Storage · Security (CompTIA Security+ SY0-701 domains) · Cloud (AWS) · Real-world outages.
+- **8 tracks, 76 lessons:** Python · DevOps/SRE (incl. CKA-level Kubernetes) · Automation · Concepts · Storage · Security (CompTIA Security+ SY0-701 domains) · Cloud (AWS) · Real-world outages.
 - **Every question explained:** a full walkthrough, plus why each wrong option is wrong.
 - **Write-it-yourself tasks:** commands are checked automatically; explanations are self-scored against key points.
 - **32 Python drills** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
 - **IDE:** several files that import each other, input and arguments, a built-in pytest runner, templates, and a .zip download.
-- **Q&A deck** with spaced repetition, mock interviews and an incident simulator.
+- **Q&A decks** with spaced repetition: 42 questions candidates report from real interviews (each linked to its source), concepts, behavioural, HR & offer, plus mock interviews and an incident simulator.
 - **Honest progress:** only active learning time counts; a focus timer for study outside the app; a 90-day calendar with per-day history; completed vs demonstrated skill.
 
 ## Project layout
