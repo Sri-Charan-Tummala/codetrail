@@ -1,0 +1,7 @@
+# Personal data stays on your machine
+js/personal.js
+
+# Test leftovers
+tests/emulator/.bk.json
+__pycache__/
+.DS_Store
