@@ -34,7 +34,7 @@ function renderLearn(){
   document.querySelectorAll('[data-track]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.track===S.track));
   {const a=document.querySelector(`.trackbar [data-track="${S.track}"]`),bar=a&&a.parentElement;if(a&&bar){const x=a.offsetLeft-bar.clientWidth/2+a.offsetWidth/2;bar.scrollLeft=Math.max(0,x);bar.classList.toggle('end',bar.scrollLeft+bar.clientWidth>=bar.scrollWidth-4)}}
   const td=today(),goals=`<div class="goals" aria-label="Today's goals">${GOALS.map(([k,n,lab])=>`<div class="goal${td[k]>=n?' met':''}"><b>${td[k]>=n?'✓':Math.min(td[k],n)+'/'+n}</b>${lab}</div>`).join('')}</div>`;
-  const mins=`<div class="today"><div class="ring" id="minRing" style="--p:0"><b id="minNum">0</b><small>min</small></div><div class="ttxt"><b id="minTxt"></b><span>Day ${Math.max(1,Math.min(p90Day(),90))} of 90 · ends ${esc(new Date(addDays(p90Start(),89)+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}</span><span class="note">Counts only while you're learning</span></div></div><div class="week" id="weekStrip" role="button" aria-label="This week — open the calendar">${weekHTML()}</div><button class="btn" data-sess>${S.sess&&S.sess.d===day()?'Resume 30-min session':'Start 30-min session'}</button>`;
+  const mins=`<div class="today"><div class="ring" id="minRing" style="--p:0"><b id="minNum">0</b><small>min</small></div><div class="ttxt"><b id="minTxt"></b><span>${S.p90?`${planPaused()?'Plan paused · ':''}Day ${Math.min(p90Day(),90)} of 90 · ends ${esc(new Date(p90End()+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}`:'90-day plan not started — <a href="#" data-p90="start" style="color:var(--rose)">start today</a>'}</span><span class="note">Counts only while you're learning</span></div></div><div class="week" id="weekStrip" role="button" aria-label="This week — open the calendar">${weekHTML()}</div><button class="btn" data-sess>${S.sess&&S.sess.d===day()?'Resume 30-min session':'Start 30-min session'}</button>`;
   const nd=PIPE.filter(p=>p.dl&&daysTo(p.dl)>=0&&!['Applied','Interviewing','Skipped for now'].includes(pst(p))).sort((a,b)=>a.dl<b.dl?-1:1)[0];
   const quick=`${nd?`<button class="btn ghost sm" data-gopipe style="width:100%;text-align:left">Next deadline: <b>${esc(nd.co)}</b> — ${daysTo(nd.dl)===0?'today':daysTo(nd.dl)===1?'tomorrow':daysTo(nd.dl)+' days'}</button>`:''}${goals}<button class="btn ghost" data-quick="mix">Quick 10 · mixed drill${weak?` · ${weak} weak spot${weak>1?'s':''}`:''}</button>`;
   $('hero').innerHTML=next<0
@@ -806,14 +806,33 @@ function focusInit(){
 /* ---------- 90-day calendar and history ---------- */
 const addDays=(d,n)=>{const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);return x.toLocaleDateString('en-CA')};
 const p90Start=()=>S.p90||day();
-const p90Day=()=>Math.round((new Date(day()+'T12:00')-new Date(p90Start()+'T12:00'))/864e5)+1;
+/* the plan can be paused: paused days don't count as missed and push the end date out */
+const pauses=()=>S.p90p||[];
+const isPaused=d=>!!S.p90&&pauses().some(([a,b])=>d>=a&&(!b||d<=b));
+const planPaused=()=>!!S.p90&&pauses().some(([a,b])=>!b);
+const dDiff=(a,b)=>Math.round((new Date(b+'T12:00')-new Date(a+'T12:00'))/864e5);
+function pausedIn(from,to){let n=0;for(const [a,b] of pauses()){const x=a>from?a:from,y=(b||to)<to?(b||to):to;if(y>=x)n+=dDiff(x,y)+1}return n}
+const p90Day=()=>S.p90?Math.max(1,dDiff(S.p90,day())+1-pausedIn(S.p90,day())):0;
+const p90End=()=>addDays(p90Start(),89+(S.p90?pausedIn(S.p90,day()):0));
+function planCtlHTML(){
+  if(!S.p90)return`<button class="btn sm" data-p90="start">Start my 90 days today</button>`;
+  return`<div class="btnrow">${planPaused()?`<button class="btn sm" data-p90="resume">Resume plan</button>`:`<button class="btn ghost sm" data-p90="pause">Pause plan</button>`}<button class="btn ghost sm" data-p90="restart">Restart from today</button></div>`;
+}
+let p90Arm=false;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-p90]');if(!b)return;e.preventDefault();const a=b.dataset.p90;S.p90p=S.p90p||[];
+  if(a==='start'){S.p90=day();S.p90p=[]}
+  if(a==='pause'&&!planPaused())S.p90p.push([day(),null]);
+  if(a==='resume'){const o=S.p90p.find(x=>!x[1]);if(o){if(o[0]===day())S.p90p.splice(S.p90p.indexOf(o),1);else o[1]=day(-1)}}
+  if(a==='restart'){if(!p90Arm){p90Arm=true;b.textContent='Tap again — progress stays, the 90 days restart today';setTimeout(()=>{p90Arm=false;b.textContent='Restart from today'},3000);return}p90Arm=false;S.p90=day();S.p90p=[]}
+  save();renderLearn();if(!$('v-me').hidden)renderMe();});
 function dayState(d){
   const s=daySec(d),g=S.log&&S.log[d],any=s>=60||(g&&g.items&&g.items.length);
   if(d>day())return'fut';
   if(s>=goalMin()*60)return'met';
   if(any)return'part';
+  if(isPaused(d))return'pause';
   if(d===day())return'today';
-  if(d<p90Start())return'pre';
+  if(!S.p90||d<p90Start())return'pre';
   return'miss';
 }
 function weekHTML(){
@@ -825,7 +844,7 @@ function renderCal(){
   const box=$('meCal');if(!box)return;
   calSel=calSel||day();calM=calM||day().slice(0,7);
   const [y,m]=calM.split('-').map(Number),first=new Date(y,m-1,1),lead=(first.getDay()+6)%7,days=new Date(y,m,0).getDate();
-  const end=addDays(p90Start(),89),dn=p90Day();
+  const end=p90End(),dn=p90Day();
   const logged=Object.keys(S.log||{}).filter(d=>d>=p90Start()&&d<=day());
   let miss=0;for(let d=p90Start();d<day();d=addDays(d,1))if(dayState(d)==='miss')miss++;
   const tot=Object.keys(S.log||{}).reduce((a,d)=>a+daySec(d),0),met=logged.filter(d=>dayState(d)==='met').length;
@@ -833,11 +852,11 @@ function renderCal(){
   for(let i=1;i<=days;i++){const d=`${calM}-${String(i).padStart(2,'0')}`,st=dayState(d),inP=d>=p90Start()&&d<=end;
     cells+=`<button class="cd ${st}${inP?' in':''}${d===calSel?' sel':''}${d===day()?' now':''}" data-cal="${d}" aria-label="${d} ${st}">${i}</button>`}
   const mn=first.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
-  box.innerHTML=`<h3>90-day plan · day ${Math.max(1,Math.min(dn,90))} of 90</h3>
-   <p class="note" style="margin:0 0 10px">${esc(fmtD(p90Start()))} → ${esc(fmtD(end))} · ${met} day${met===1?'':'s'} on target · ${miss} missed · ${(tot/3600).toFixed(1)} h learned in total</p>
+  box.innerHTML=`<h3>90-day plan · ${S.p90?(planPaused()?'paused at ':'')+'day '+Math.min(dn,90)+' of 90':'not started'}</h3>
+   <p class="note" style="margin:0 0 10px">${S.p90?`${esc(fmtD(p90Start()))} → ${esc(fmtD(end))}${planPaused()?' (paused — the end date moves out each paused day)':''}${pausedIn(p90Start(),day())?` · ${pausedIn(p90Start(),day())} paused day${pausedIn(p90Start(),day())>1?'s':''}`:''} · `:'Not started yet · '}${met} day${met===1?'':'s'} on target · ${miss} missed · ${(tot/3600).toFixed(1)} h learned in total</p>${planCtlHTML()}
    <div class="calhd"><button class="btn ghost sm" data-calm="-1" aria-label="Previous month">‹</button><b>${esc(mn)}</b><button class="btn ghost sm" data-calm="1" aria-label="Next month">›</button></div>
    <div class="cal"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>${cells}</div>
-   <p class="note legend"><i class="lg met"></i>goal met <i class="lg part"></i>some learning <i class="lg miss"></i>nothing done <i class="lg in"></i>inside the 90 days</p>
+   <p class="note legend"><i class="lg met"></i>goal met <i class="lg part"></i>some learning <i class="lg miss"></i>nothing done <i class="lg pause"></i>paused <i class="lg in"></i>inside the 90 days</p>
    <label for="goalSel">Daily goal</label><select id="goalSel">${[15,20,30,45,60,90].map(n=>`<option value="${n}" ${n===goalMin()?'selected':''}>${n} minutes</option>`).join('')}</select>
    <div id="calDay" style="margin-top:14px">${dayDetail(calSel)}</div>`;
 }
@@ -858,7 +877,6 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{if(e.target.id==='goalSel'){S.goalMin=+e.target.value;save();renderCal();updMin()}});
 
-if(!S.p90){S.p90=day();save()}
 focusInit();
 /* ---------- 30-minute daily session + minutes ---------- */
 const SESS=[[`Quick 10 drill`,5],[`One lesson`,10],[`One code drill`,10],[`Q&A review`,5]];
@@ -1001,7 +1019,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ---------- 90-day plan ---------- */
-function weekNow(){if(!S.p90)return 0;const d=Math.floor((new Date(day())-new Date(S.p90))/864e5);return Math.min(11,Math.max(0,Math.floor(d/7)))}
+function weekNow(){if(!S.p90)return 0;return Math.min(11,Math.max(0,Math.floor((p90Day()-1)/7)))}
 function itemDone(it){const[k,v]=it;return k==='l'?!!S.done[v]:k==='d'?!!S.done['ch_'+v]:k==='s'?!!S.done['sim_'+v]:!!(S.plan&&S.plan['p90_'+v])}
 function itemHTML(it){
   const[k,v]=it,d=itemDone(it);let lab,attr;
@@ -1015,12 +1033,12 @@ function renderPlan90(){
   const box=$('plan90');if(!box)return;
   if(!S.p90){box.innerHTML=`<h3>90-day job plan</h3><p class="note">Twelve focused weeks: coding without AI, Linux, storage (your edge), Kubernetes, CI/CD, SRE, security, system design, then mocks and applications. 30 minutes a day on weekdays, a bit more at weekends.</p><button class="btn" id="p90start">Start my 90 days today</button>`;return}
   const w=weekNow(),done=PLAN90.flat().length&&PLAN90.reduce((a,[_,its])=>a+its.filter(itemDone).length,0),tot=PLAN90.reduce((a,[_,its])=>a+its.length,0);
-  box.innerHTML=`<h3>90-day job plan · week ${w+1} of 12</h3><div class="meter" style="margin:8px 0"><i style="width:${Math.round(done/tot*100)}%"></i></div><p class="note">${done} of ${tot} tasks done · started ${esc(S.p90)}</p>`+
+  box.innerHTML=`<h3>90-day job plan · week ${w+1} of 12</h3><div class="meter" style="margin:8px 0"><i style="width:${Math.round(done/tot*100)}%"></i></div><p class="note">${done} of ${tot} tasks done · day ${Math.min(p90Day(),90)} of 90${planPaused()?' · paused':''}</p>${planCtlHTML()}`+
    PLAN90.map(([title,its],i)=>`<details ${i===w?'open':''} style="border-top:1px solid var(--line);padding:8px 0"><summary style="cursor:pointer;font-weight:700;min-height:32px">${its.every(itemDone)?'✓ ':''}Week ${i+1} · ${esc(title)}${i===w?' · this week':''}</summary><ul style="list-style:none;margin:6px 0 0;padding:0">${its.map(itemHTML).join('')}</ul></details>`).join('')+
    `<p class="note" style="margin-top:10px">Lessons, drills and simulations tick themselves when you finish them; tap the others when done.</p>`;
 }
 document.addEventListener('click',e=>{
-  if(e.target.id==='p90start'){S.p90=day();save();renderPlan90();return}
+  if(e.target.id==='p90start'){S.p90=day();S.p90p=[];save();renderPlan90();return}
   const g=e.target.closest('[data-gosim]');if(g){show('play');codeMode('sim');simCur={id:g.dataset.gosim,step:0,tried:[],last:null,first:0};renderSim()}
   const p=e.target.closest('[data-plan^="p90_"]');if(p&&!$('v-me').hidden){const y=scrollY;renderPlan90();scrollTo(0,y)}
 });
