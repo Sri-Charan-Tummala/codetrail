@@ -547,7 +547,7 @@ const demonstrated=k=>!!((S.att&&S.att[k]&&S.att[k].ok)||(S.rev&&S.rev[k]));
 function demoPct(ids){const ks=ALL.filter(l=>ids.includes(l.id)).flatMap(l=>l.steps.filter(s=>s.t!=='learn').map(s=>s.k));return ks.length?Math.round(ks.filter(demonstrated).length/ks.length*100):0}
 
 const NO={
-"p1:1":["That would mean b got a fresh copy; b = a only adds a second name for the same list.","","Nothing removed items; the append went into the one shared list.","Appending through either name is valid Python."],
+"p1:1":["That would need a fresh [] on every call, but the default list is built once, when def runs, so add(1) already put 1 in it.","","The default list is not emptied between calls; it keeps what earlier calls appended.","Appending to a default argument is legal Python, just a classic bug."],
 "p1:3":["That copies nothing — both names point at the same list.","A slice copies only the outer list; the inner lists are still shared.","copy.copy is a shallow copy, same problem as a[:].",""],
 "p1:4":["They differ: equal values can live in two separate objects.","","Backwards — is checks identity, == checks value.","is works on any object; small-int caching just makes it look value-like."],
 "p2:2":["Generators can't be indexed at all — you can only iterate them.","","You can't sort a generator without first turning it into a list.","Generators give no thread-safety guarantee."],

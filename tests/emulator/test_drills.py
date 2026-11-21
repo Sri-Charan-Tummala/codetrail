@@ -30,3 +30,5 @@ with sync_playwright() as p:
     print('FRESH NS:',pg.inner_text('#verdict')[:90])
     None
     b.close(); print('PAGE ERRORS',errs)
+assert not bad, f'{len(bad)} drill problems'
+assert not errs, 'page errors'
