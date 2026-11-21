@@ -49,14 +49,19 @@ There are two ways. **A** has everything, including your personal data. **B** ne
 
 You can also open the link inside the Claude app on either phone.
 
-### B. GitHub Pages (public, installable, works offline)
+### B. GitHub Pages (installable, works fully offline)
 One-time setup on github.com: **Settings → Pages → Build and deployment → Deploy from a branch → `main` / `/ (root)` → Save**.
 After a minute or two the app is live at **https://sri-charan-tummala.github.io/codetrail/**. (GitHub Pages needs a public repo on the free plan.)
 
 **iPhone:** open that address in **Safari** → **Share** → **Add to Home Screen** → **Add**. It opens full-screen like an app.
 **Android:** open it in **Chrome** → **⋮** → **Install app** (or **Add to Home screen**) → **Install**.
 
-After installing, the lessons work offline. Python drills and the IDE need internet the first time (about 10 MB).
+**To use it fully offline:**
+1. In the installed app, go to **Progress** → **Get Python ready for offline**, on Wi-Fi (about 12 MB, once). After that, drills, SQL and the IDE run with no internet.
+2. To bring your personal data (pipeline, stories, answers), open the Claude link, go to **Progress → Download backup file**, then in the Pages app go to **Progress → Restore from file**. The backup file carries your progress and your personal data, which is saved on the phone only and never in the repo.
+
+The Claude link itself can't work offline: claude.ai must load and check your sign-in each time.
+On iPhone, keep the Home Screen icon: Safari may clear saved data for sites you only visit in the browser after a few weeks of not using them.
 
 ### Moving your progress between phones or browsers
 Each browser and each home-screen app keeps its own progress. On the old one go to **Progress → Download backup file**, then on the new one use **Progress → Restore from file**. **Copy progress code** and **Import** do the same through the clipboard.
