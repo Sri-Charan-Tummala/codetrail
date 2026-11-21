@@ -1,7 +1,7 @@
 // CodeTrail offline cache: the app shell works without internet.
 // The Python runner (Pyodide) still needs a connection the first time.
-const CACHE = 'codetrail-v2';
-const SHELL = ['./', './index.html', './css/app.css', './js/lessons.js', './js/content.js', './js/app.js', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'codetrail-v3';
+const SHELL = ['./', './index.html', './css/app.css', './js/lessons.js', './js/content.js', './js/library.js', './js/app.js', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL).then(() => c.add('./js/personal.js').catch(() => {}))))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {

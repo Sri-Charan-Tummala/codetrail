@@ -4,12 +4,13 @@ A phone-friendly interview-prep app for Platform/SRE, DevOps, storage, security 
 Plain HTML, CSS and JavaScript: no build step, no server, no accounts. Progress stays in your browser.
 
 ## What's inside
-- **8 tracks, 76 lessons:** Python · DevOps/SRE (incl. CKA-level Kubernetes) · Automation · Concepts · Storage · Security (CompTIA Security+ SY0-701 domains) · Cloud (AWS) · Real-world outages.
+- **8 tracks, 82 lessons:** Python · DevOps/SRE (incl. CKA-level Kubernetes) · Automation · Concepts · Storage · Security (CompTIA Security+ SY0-701 domains) · Cloud (AWS) · Real-world outages.
 - **Every question explained:** a full walkthrough, plus why each wrong option is wrong.
 - **Write-it-yourself tasks:** commands are checked automatically; explanations are self-scored against key points.
-- **32 Python drills** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
+- **38 drills (incl. 6 SQL)** that run real Python in the browser (Pyodide in a Web Worker), with an **interview mode** (timed, no hints).
 - **IDE:** several files that import each other, input and arguments, a built-in pytest runner, templates, and a .zip download.
 - **Q&A decks** with spaced repetition: 42 questions candidates report from real interviews (each linked to its source), concepts, behavioural, HR & offer, plus mock interviews and an incident simulator.
+- **Prep library:** a role-by-role syllabus (what a ~4-year engineer must know, mapped to lessons and weeks), 16 offline guides and cheat sheets, and 70+ official documentation links.
 - **Honest progress:** only active learning time counts; a focus timer for study outside the app; a 90-day calendar with per-day history; completed vs demonstrated skill.
 
 ## Project layout
@@ -18,6 +19,7 @@ index.html               page shell
 css/app.css              styles
 js/lessons.js            tracks, lessons and steps
 js/content.js            Q&A decks, drills and solutions, roles, plans, simulations, option notes
+js/library.js            syllabus per role, offline guides, official documentation links
 js/app.js                app logic: screens, lesson engine, Q&A, Python runner, IDE, tracking
 js/personal.example.js   template for your personal data
 js/personal.js           your personal data — git-ignored, never committed

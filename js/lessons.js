@@ -847,3 +847,90 @@ MN(`What happens with: @dataclass class C: items: list = []`,'',[`ValueError —
 F(`Wait for all the coroutines and collect their results`,`results = await asyncio.___(*tasks)`,[`gather`,`run`,`sleep`,`wait_for`],[`gather`],`gather runs them concurrently and returns results in order; asyncio.run starts the loop.`),
 MN(`Are Python type hints enforced at runtime?`,'',[`No — tools like mypy check them; the interpreter ignores them`,`Yes, always`,`Only from Python 3.12`,`Only for int and str`],0,`Hints are metadata. Use mypy or pydantic when you need checking.`,['',`Python stores them but doesn't check calls against them.`,`No version enforces them.`,`No type is enforced.`])]}
 );
+
+/* ---------- Added lessons: round 2 ---------- */
+TRACKS.ops.lessons.push(
+{id:'o20',u:`Linux & networking`,title:`Performance & network troubleshooting tools`,ref:[[`Brendan Gregg — Linux performance`,`https://www.brendangregg.com/linuxperf.html`],[`ss(8) manual`,`https://man7.org/linux/man-pages/man8/ss.8.html`]],steps:[
+Lr(`Is it CPU, memory, disk or network?`,`Use the USE method — <b>utilisation, saturation, errors</b> — for each resource. <code>vmstat 1</code>: high <b>r</b> means CPU queueing, <b>si/so</b> means swapping, high <b>wa</b> means waiting on I/O. <code>iostat -xz 1</code>: <b>%util</b> near 100 and rising <b>await</b> mean a saturated disk. <code>free -m</code>: look at "available", not "free".`,`vmstat 1 5
+iostat -xz 1 3
+pidstat -u -r -d 1 5     # per-process CPU, memory, disk
+sar -n DEV 1 3           # per-interface network throughput`),
+Lr(`Following a connection`,`<code>ss -tanp</code> shows sockets and their states; lots of <b>TIME_WAIT</b> is normal on busy clients, lots of <b>SYN-SENT</b> means the far side isn't answering. <code>dig</code> checks DNS, <code>curl -v</code> checks TLS and HTTP, <code>tcpdump</code> shows what's really on the wire.`,`ss -tanp state established '( dport = :5432 )'
+dig +short db.internal ; dig @10.0.0.2 db.internal
+curl -sv --connect-timeout 3 https://api.internal/health
+tcpdump -i eth0 -nn host 10.0.0.12 and port 443 -c 20`),
+MN(`vmstat shows wa at 45% and iostat shows one disk at 99% util. What's the bottleneck?`,'',[`Disk I/O on that device`,`CPU`,`Network`,`Not enough swap`],0,`High I/O wait plus a saturated disk points to storage. Find the process with pidstat -d or iotop.`,['',`CPU-bound shows high us/sy and a long run queue, not wait.`,`Network isn't measured by these columns.`,`Adding swap would make I/O worse.`]),
+MN(`An app can't reach the database. DNS resolves and ping works. Next check?`,'',[`Whether the port answers: nc -zv db 5432 or ss/tcpdump`,`Reboot the database`,`Flush DNS again`,`Reinstall the app`],0,`Ping proves the host is up, not that the port is open — firewalls and security groups often block it.`,['',`Disruptive and premature.`,`DNS already works.`,`Nothing suggests the app is broken.`]),
+F(`See which process is listening on port 8080`,`ss -tlnp | grep ___`,[`:8080`,`8080/udp`,`LISTEN-8080`,`port=8080`],[`:8080`],`ss -tlnp lists TCP listeners with numeric ports and owning processes; the local address ends in :8080.`),
+MN(`free -m shows "free" at 200 MB but "available" at 9 GB. Is the box out of memory?`,'',[`No — Linux uses spare RAM as page cache and gives it back when needed`,`Yes — add RAM now`,`Yes — restart services`,`It means swap is broken`],0,`"available" estimates memory usable without swapping; low "free" is normal.`,['',`Nothing is short of memory.`,`Restarting just empties a useful cache.`,`Swap isn't involved here.`])]},
+{id:'o21',u:`Kubernetes for CKA`,title:`Kubernetes networking: Services, Ingress, DNS`,ref:[[`Kubernetes — Service`,`https://kubernetes.io/docs/concepts/services-networking/service/`],[`Kubernetes — Ingress`,`https://kubernetes.io/docs/concepts/services-networking/ingress/`],[`DNS for Services and Pods`,`https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/`]],steps:[
+Lr(`How traffic finds pods`,`Every pod gets its own IP. A <b>Service</b> gives a stable virtual IP and DNS name and load-balances to pods whose labels match its <b>selector</b>; the matching pods are its <b>Endpoints</b>. Types: <b>ClusterIP</b> (inside the cluster), <b>NodePort</b> (a port on every node), <b>LoadBalancer</b> (cloud load balancer). Cluster DNS names look like <code>svc.namespace.svc.cluster.local</code>.`,`kubectl get svc app -o wide
+kubectl get endpoints app        # empty = selector matches no ready pods
+kubectl run tmp --rm -it --image=busybox -- nslookup app.prod.svc.cluster.local`),
+Lr(`Ingress and the usual faults`,`An <b>Ingress</b> routes HTTP(S) by host and path to Services, handled by an ingress controller (NGINX, cloud controllers). Most "no traffic" faults are: selector doesn't match pod labels, pods not Ready, targetPort wrong, NetworkPolicy blocking, or Ingress pointing at the wrong Service or port.`,`apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: web }
+spec:
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend: { service: { name: web, port: { number: 80 } } }`),
+MN(`A Service exists but kubectl get endpoints shows none. Most likely cause?`,'',[`The selector doesn't match the pods' labels, or the pods aren't Ready`,`The cluster DNS is down`,`The Service type is ClusterIP`,`The node is out of disk`],0,`Endpoints list ready pods that match the selector — compare kubectl get pods --show-labels with the selector.`,['',`DNS issues give name resolution errors, not empty endpoints.`,`ClusterIP services still get endpoints.`,`Disk pressure evicts pods but isn't the usual first cause.`]),
+MN(`Expose an HTTP app on a hostname with TLS, routing /api and / to different Services. Use?`,'',[`An Ingress with host and path rules and a TLS secret`,`A NodePort per service`,`hostNetwork on the pods`,`A ClusterIP Service`],0,`Ingress does host/path routing and TLS termination through the controller.`,['',`NodePorts expose raw ports with no host or path routing.`,`That bypasses Kubernetes networking and is insecure.`,`ClusterIP is only reachable inside the cluster.`]),
+F(`DNS name of Service "api" in namespace "prod"`,`api.___.svc.cluster.local`,[`prod`,`default`,`kube-system`,`pod`],[`prod`],`The pattern is service.namespace.svc.cluster.local; inside the same namespace, just "api" works.`),
+MN(`The Service's port is 80 but the container listens on 8080. Which field fixes it?`,'',[`targetPort: 8080 on the Service`,`containerPort: 80`,`nodePort: 8080`,`hostPort: 8080`],0,`port is what clients call; targetPort is where traffic goes on the pod.`,['',`containerPort is mostly informational and the app still listens on 8080.`,`nodePort exposes a port on nodes; it doesn't change the pod target.`,`hostPort binds the node's port and is rarely the right fix.`])]},
+{id:'o22',u:`Delivery & reliability`,title:`Helm: packaging Kubernetes apps`,ref:[[`Helm documentation`,`https://helm.sh/docs/`]],steps:[
+Lr(`Charts, values, releases`,`A <b>chart</b> is a package of templated Kubernetes manifests. <b>values.yaml</b> holds defaults; you override them per environment. Installing a chart creates a <b>release</b> with a revision history, so you can roll back.`,`helm repo add bitnami https://charts.bitnami.com/bitnami
+helm install web ./chart -f values-prod.yaml -n prod
+helm upgrade web ./chart -f values-prod.yaml --atomic --timeout 5m
+helm history web -n prod ; helm rollback web 3 -n prod
+helm template ./chart -f values-prod.yaml | kubectl diff -f -`),
+Lr(`Using it well`,`Keep one chart and per-environment values files; preview with <code>helm template</code> or <code>helm diff</code>; use <code>--atomic</code> so a failed upgrade rolls back automatically. Don't put secrets in values files in Git — use a secrets manager or sealed/external secrets.`,`# values-prod.yaml
+replicaCount: 3
+image: { repository: registry/web, tag: "1.8.2" }
+resources: { requests: { cpu: 200m, memory: 256Mi }, limits: { memory: 512Mi } }`),
+MN(`An upgrade broke production. Fastest safe recovery with Helm?`,'',[`helm rollback to the last good revision`,`Delete the namespace`,`Edit the pods by hand`,`helm uninstall and start over`],0,`Helm keeps release history; rollback re-applies the previous revision.`,['',`That destroys everything in it.`,`Manual edits drift from the chart and get overwritten.`,`Uninstall causes a full outage first.`]),
+MN(`How do you see exactly what an upgrade will change before applying it?`,'',[`Render with helm template (or the helm diff plugin) and compare`,`Run helm upgrade and watch`,`Read values.yaml only`,`Delete and reinstall`],0,`Rendering shows the real manifests; diffing shows the change.`,['',`That applies it — too late to preview.`,`Templates can change output in ways values alone don't show.`,`Destructive.`]),
+F(`Roll back automatically if an upgrade fails`,`helm upgrade web ./chart ___ --timeout 5m`,[`--atomic`,`--force`,`--dry-run`,`--debug`],[`--atomic`],`--atomic waits for resources and rolls back on failure; --force recreates resources and can cause downtime.`),
+MN(`Where should a chart's database password come from?`,'',[`A secrets manager or an external/sealed secret, not plain values in Git`,`values.yaml in the repo`,`A ConfigMap`,`An environment variable in the Dockerfile`],0,`Values files are committed; ConfigMaps aren't for secrets; images get shared.`,['',`Anything committed is exposed to everyone with access.`,`ConfigMaps aren't designed for secrets.`,`Baked into the image for anyone who pulls it.`])]},
+{id:'o23',u:`Delivery & reliability`,title:`Azure fundamentals for DevOps`,ref:[[`Microsoft Learn — Azure fundamentals`,`https://learn.microsoft.com/en-us/training/paths/microsoft-azure-fundamentals-describe-cloud-concepts/`],[`Azure documentation`,`https://learn.microsoft.com/en-us/azure/`]],steps:[
+Lr(`The Azure map in AWS terms`,`<b>Subscriptions</b> hold billing and limits; <b>resource groups</b> hold related resources. Identity is <b>Microsoft Entra ID</b>; permissions are <b>Azure RBAC</b> roles at a scope. Rough equivalents: VM ≈ EC2, VNet ≈ VPC, NSG ≈ security group, Blob Storage ≈ S3, AKS ≈ EKS, Azure Monitor ≈ CloudWatch, Key Vault ≈ Secrets Manager.`,`az login
+az group create -n rg-web -l centralindia
+az aks create -g rg-web -n aks-web --node-count 3 --enable-managed-identity
+az aks get-credentials -g rg-web -n aks-web`),
+Lr(`Identity and pipelines`,`Prefer <b>managed identities</b> for Azure resources and <b>workload identity federation</b> (OIDC) for pipelines, so no secrets are stored. Azure DevOps Pipelines and GitHub Actions both deploy to Azure; Key Vault holds secrets; Azure Monitor and Log Analytics hold metrics and logs.`,`# GitHub Actions → Azure without secrets
+permissions: { id-token: write, contents: read }
+steps:
+  - uses: azure/login@v2
+    with: { client-id: AZ_CLIENT_ID, tenant-id: AZ_TENANT_ID, subscription-id: AZ_SUB_ID }`),
+MN(`A VM-hosted app must read from Blob Storage. Best practice?`,'',[`Give the VM a managed identity with a least-privilege role on the storage account`,`Store the account key in a config file`,`Make the container public`,`Use the subscription owner's credentials`],0,`Managed identities remove secrets entirely; scope the role tightly.`,['',`Keys in files leak and don't rotate.`,`Public containers expose data.`,`Far too much privilege.`]),
+MN(`Which Azure resource is closest to an AWS security group?`,'',[`Network Security Group (NSG)`,`Resource group`,`Azure Policy`,`Application Gateway`],0,`NSGs filter traffic to subnets and network interfaces.`,['',`A resource group is a container for management, not a firewall.`,`Policy enforces rules on resource configuration.`,`That's a layer-7 load balancer and WAF.`]),
+F(`Organise related resources so you can manage and delete them together`,`az ___ create -n rg-web -l centralindia`,[`group`,`vm`,`account`,`network`],[`group`],`Resource groups are the management boundary; deleting one deletes everything inside.`),
+MN(`Your pipeline deploys to Azure. How should it authenticate?`,'',[`Workload identity federation (OIDC) — short-lived tokens, no stored secret`,`A client secret that never expires`,`A personal user account`,`The storage account key`],0,`Federation gives short-lived tokens tied to the repo and branch.`,['',`Long-lived secrets leak and are hard to rotate.`,`Personal accounts break when people leave and bypass review.`,`That only covers one storage account and is a high-value secret.`])]}
+);
+TRACKS.con.lessons.push(
+{id:'k16',u:`How things work: Systems design`,title:`Databases for operations`,ref:[[`PostgreSQL — high availability, load balancing and replication`,`https://www.postgresql.org/docs/current/high-availability.html`],[`PostgreSQL — backup and restore`,`https://www.postgresql.org/docs/current/backup.html`]],steps:[
+Lr(`Indexes, transactions, replication`,`An <b>index</b> speeds reads on the indexed columns and slows writes. <b>Transactions</b> give ACID: all or nothing, consistent, isolated, durable. <b>Replication</b> copies changes to replicas: synchronous (no data loss, slower writes) or asynchronous (faster, can lose the last seconds on failover). Read replicas scale reads, not writes.`,`EXPLAIN ANALYZE SELECT * FROM orders WHERE customer_id = 42;
+CREATE INDEX idx_orders_customer ON orders(customer_id);`),
+Lr(`Backups that actually restore`,`Logical dumps (pg_dump) are portable but slow for big databases. Physical backups plus <b>WAL archiving</b> give <b>point-in-time recovery</b> — restore to just before a bad change. Test restores regularly and time them against the RTO. Connection pools (PgBouncer) stop apps exhausting connections.`,`pg_dump -Fc shop > shop.dump        # logical
+pg_basebackup -D /backup/base -X stream  # physical, plus WAL archive for PITR`),
+MN(`Someone ran a bad UPDATE at 14:05. You need the data as it was at 14:04. What makes that possible?`,'',[`Physical backups plus WAL archiving (point-in-time recovery)`,`Last night's pg_dump only`,`A read replica`,`An index`],0,`PITR replays the log up to a chosen moment.`,['',`That loses everything since last night.`,`The replica already applied the bad UPDATE.`,`Indexes don't keep history.`]),
+MN(`Reads are slow and CPU is high on the primary. Writes are fine. First move?`,'',[`Find slow queries with EXPLAIN and add the right indexes; then consider read replicas`,`Shard the database immediately`,`Add more write capacity`,`Turn off backups`],0,`Most slow reads are missing indexes; replicas help scale reads after that.`,['',`Sharding is costly and complex — a last resort.`,`Writes aren't the problem.`,`Dangerous and unrelated.`]),
+F(`See how a query is executed and how long each step takes`,`___ ANALYZE SELECT * FROM orders WHERE id = 7;`,[`EXPLAIN`,`DESCRIBE`,`SHOW`,`TRACE`],[`EXPLAIN`],`EXPLAIN ANALYZE runs the query and shows the plan with real timings.`),
+MN(`Synchronous vs asynchronous replication?`,'',[`Synchronous waits for the replica before confirming (no loss, slower); asynchronous doesn't (faster, may lose recent writes)`,`They're the same`,`Asynchronous never loses data`,`Synchronous only works in one data centre on the same disk`],0,`It's the RPO-versus-latency trade-off.`,['',`They differ in when a commit is confirmed.`,`It can lose whatever hadn't replicated yet.`,`Sync works across sites — latency is the limit.`])]},
+{id:'k17',u:`How things work: Systems design`,title:`Incident management & on-call`,ref:[[`Google SRE book — managing incidents`,`https://sre.google/sre-book/managing-incidents/`],[`PagerDuty incident response`,`https://response.pagerduty.com/`]],steps:[
+Lr(`Running an incident`,`Declare early and set a severity. Assign roles: an <b>incident commander</b> who coordinates (and doesn't debug), <b>operations</b> who fix, and <b>communications</b> who update stakeholders on a schedule. Priority order: <b>mitigate first</b> (rollback, failover, feature flag), root cause later. Keep a timeline as you go.`,`SEV1  customer-facing outage   → page now, update every 30 min
+SEV2  degraded / partial         → page, update hourly
+SEV3  minor, workaround exists   → ticket, next business day`),
+Lr(`After the incident`,`Write a <b>blameless postmortem</b>: impact, timeline, root causes and contributing factors, what went well, and action items with owners and dates. Track the actions to done. Good on-call has actionable alerts, runbooks, sane rotations and follow-up on noisy pages.`,`Postmortem: Checkout errors, 2026-11-14
+Impact: 18% of checkouts failed for 42 min
+Trigger: config push with a bad pool size
+Actions: validate config in CI (owner, date); canary config pushes (owner, date)`),
+MN(`Error rates spike right after a deploy. What do you do first?`,'',[`Roll back (mitigate), then investigate the cause`,`Debug in production until you find the root cause`,`Wait to see if it recovers`,`Email the team and wait for replies`],0,`Restore service first; the deploy is the prime suspect and rollback is quick.`,['',`Users stay broken while you debug.`,`Hoping isn't a plan.`,`Too slow for a live outage.`]),
+MN(`What's the incident commander's main job?`,'',[`Coordinate: roles, decisions, communication cadence — not hands-on debugging`,`Fix the bug personally`,`Write the postmortem during the incident`,`Find who caused it`],0,`Someone has to keep the big picture while others fix.`,['',`Debugging pulls them out of coordination.`,`The postmortem comes after.`,`Blame doesn't fix anything and stops people speaking up.`]),
+F(`A review that focuses on systems and process, not people`,`a ___ postmortem`,[`blameless`,`private`,`legal`,`quick`],[`blameless`],`Blameless reviews get honest timelines and fix the system.`),
+MN(`An alert pages on-call every night but never needs action. What should happen?`,'',[`Fix or remove it — every page should need human action`,`Keep it; more alerts are safer`,`Mute the on-call's phone`,`Raise its severity`],0,`Noisy alerts cause fatigue and real pages get missed.`,['',`Alert fatigue makes things less safe.`,`That hides real pages too.`,`Makes the noise worse.`])]}
+);

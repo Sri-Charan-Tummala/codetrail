@@ -169,6 +169,31 @@ document.querySelectorAll('nav [data-v]').forEach(b=>b.addEventListener('click',
 let rv=PIPE.length?'pipe':'roles',roleOpen=null,timer=null;
 const LV=['Not yet','Learning','Confident'];
 const readiness=r=>{const t=r.skills.reduce((a,_,i)=>a+(S.skills[r.id+i]||0),0);return Math.round(t/(r.skills.length*2)*100)};
+/* ---------- Syllabus, guides and official docs ---------- */
+let guideOpen=null,docQ='';
+const LVL={must:'Must know',strong:'Strong plus',plus:'Your edge'};
+function sylHTML(id,open){
+  const y=SYL[id],r=ROLES.find(x=>x.id===id);if(!y||!r)return'';
+  const ids=[...new Set(y.items.flatMap(it=>it[3]))].filter(l=>ALL.find(x=>x.id===l)),done=ids.filter(l=>S.done[l]).length,pct=ids.length?Math.round(done/ids.length*100):0;
+  return`<details class="panel" ${open?'open':''}><summary style="cursor:pointer;min-height:32px"><b>${esc(r.name)}</b> · ${pct}% of its lessons done · demonstrated ${demoPct(ids)}%</summary>
+  <p class="note" style="margin:8px 0 10px">${esc(y.lvl)}</p><div class="meter" style="margin-bottom:12px"><i style="width:${pct}%"></i></div>
+  ${y.items.map(([t,lv,know,ls,wk])=>`<div class="sy"><div class="syh"><span class="lv ${lv}">${LVL[lv]}</span><b>${esc(t)}</b><span class="note">weeks ${esc(wk)}</span></div><p class="note" style="margin:4px 0 6px">${esc(know)}</p><div class="btnrow">${ls.map(l=>{const L0=ALL.find(x=>x.id===l);return L0?`<button class="btn ghost sm" data-open="${l}">${S.done[l]?'✓ ':''}${esc(L0.title)}</button>`:''}).join('')}</div></div>`).join('')}
+  <p class="note" style="margin:10px 0 0">Also: Q&amp;A decks ${r.decks.map(d=>DECK[d]).join(', ')}, the code drills in interview mode, and the stories for this role.</p></details>`;
+}
+function renderSyl(){return`<p class="note" style="margin:0 0 14px">What a ~4-year engineer is expected to know for each of your target roles, in priority order, with the lessons that cover it and the weeks of your 90-day plan. "Must know" comes up in almost every interview loop.</p>`+['sre','devops','res','sdet','pyauto'].map((id,i)=>sylHTML(id,i===0)).join('')}
+function renderGuides(){
+  if(guideOpen){const g=GUIDES.find(x=>x.id===guideOpen);return`<button class="back" data-guide="">← All guides</button><span class="note">${esc(g.cat)}</span><h2 style="font-size:26px;margin:4px 0 12px">${esc(g.title)}</h2><div class="panel guide">${g.body}</div><button class="btn ghost sm" data-guide="">← All guides</button>`}
+  const cats=[...new Set(GUIDES.map(g=>g.cat))];
+  return`<p class="note" style="margin:0 0 14px">Short, offline reference documents — read one the night before an interview.</p>`+cats.map(c=>`<h3 class="unit">${esc(c)}</h3>${GUIDES.filter(g=>g.cat===c).map(g=>`<button class="role" data-guide="${g.id}"><h3>${esc(g.title)}</h3><small>${esc(g.sum)}</small></button>`).join('')}`).join('');
+}
+function renderDocs(){
+  const q=docQ.trim().toLowerCase(),m=it=>!q||(it[0]+' '+it[2]).toLowerCase().includes(q);
+  const cats=DOCS.map(c=>({cat:c.cat,items:c.items.filter(m)})).filter(c=>c.items.length);
+  return`<p class="note" style="margin:0 0 10px">Official documentation and primary sources, grouped by topic. Links open in a new tab.</p><input id="docQ" placeholder="Search docs (e.g. kubectl, TLS, SLO)" autocapitalize="off" autocorrect="off" style="margin-bottom:12px">`+
+   (cats.length?cats.map(c=>`<div class="panel links"><h3>${esc(c.cat)}</h3>${c.items.map(([t,u,w])=>`<a href="${u}" target="_blank" rel="noopener">${esc(t)} ↗</a><p class="note" style="margin:0 0 8px">${esc(w)}</p>`).join('')}</div>`).join(''):`<p class="note">Nothing matches "${esc(docQ)}".</p>`);
+}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-guide]');if(g){guideOpen=g.dataset.guide||null;renderRoles();window.scrollTo(0,0)}});
+document.addEventListener('input',e=>{if(e.target.id==='docQ'){docQ=e.target.value;renderRoles()}});
 function renderRoles(){
   if(timer){clearInterval(timer);timer=null}
   document.querySelectorAll('[data-rv]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.rv===rv));
@@ -183,6 +208,9 @@ function renderRoles(){
   }
   if(rv==='pipe'){box.innerHTML=renderPipeline();return}
   if(rv==='comp'){box.innerHTML=renderCompanies();return}
+  if(rv==='syl'){box.innerHTML=renderSyl();return}
+  if(rv==='guides'){box.innerHTML=renderGuides();return}
+  if(rv==='docs'){box.innerHTML=renderDocs();const q=$('docQ');if(q&&docQ){q.value=docQ;q.focus();q.setSelectionRange(docQ.length,docQ.length)}return}
   if(rv==='res'){
     const cats=[...new Set(RES.map(r=>r.cat))];
     box.innerHTML=`<p class="note" style="margin:0 0 14px">Free places to practise and read. Checked ${FEED[FEED.length-1].d}; the weekly update adds more.</p>`+cats.map(c=>`<div class="panel links"><h3>${esc(c)}</h3>${RES.filter(r=>r.cat===c).map(r=>`<a href="${r.u}" target="_blank" rel="noopener">${esc(r.t)} ↗</a><p class="note" style="margin:0 0 8px">${esc(r.why)}</p>`).join('')}</div>`).join('');
@@ -193,6 +221,7 @@ function renderRoles(){
     box.innerHTML=`<button class="back" data-role="">← All roles</button><h2 style="font-size:28px;margin:4px 0 8px">${esc(r.name)}</h2><p style="margin:0 0 14px">${esc(r.sum)}</p>
     <div class="panel"><h3>Demonstrated ${demoPct(r.lessons)}%</h3><div class="meter"><i style="width:${demoPct(r.lessons)}%"></i></div><p class="note" style="margin:6px 0 12px">Questions in this role's lessons you got right first time or passed again later.</p><h3>Self-rated ${rd}%</h3><div class="meter"><i style="width:${rd}%;background:var(--dusk)"></i></div><p class="note" style="margin:10px 0 0">Tap a skill to move it: not yet → learning → confident. If self-rated runs far ahead of demonstrated, drill those lessons.</p>
     ${r.skills.map((s,i)=>{const lv=S.skills[r.id+i]||0;return`<button class="skill s${lv}" data-skill="${r.id+i}"><i></i><span>${esc(s)}</span><em>${LV[lv]}</em></button>`}).join('')}</div>
+    ${SYL[r.id]?sylHTML(r.id,true):''}
     ${planHTML(r)}
     <div class="panel"><h3>Typical interview rounds</h3><ol class="rounds">${r.rounds.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>
     <div class="panel"><h3>Practise in this app</h3><div class="btnrow">${r.lessons.map(id=>{const l=ALL.find(x=>x.id===id);return`<button class="btn ghost sm" data-open="${id}">${S.done[id]?'✓ ':''}${esc(l.title)}</button>`}).join('')}</div>
