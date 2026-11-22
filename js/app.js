@@ -36,7 +36,7 @@ function renderLearn(){
   const td=today(),goals=`<div class="goals" aria-label="Today's goals">${GOALS.map(([k,n,lab])=>`<div class="goal${td[k]>=n?' met':''}"><b>${td[k]>=n?'✓':Math.min(td[k],n)+'/'+n}</b>${lab}</div>`).join('')}</div>`;
   const mins=`<div class="today"><div class="ring" id="minRing" style="--p:0"><b id="minNum">0</b><small>min</small></div><div class="ttxt"><b id="minTxt"></b><span>${S.p90?`${planPaused()?'Plan paused · ':''}Day ${Math.min(p90Day(),90)} of 90 · ends ${esc(new Date(p90End()+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}`:'90-day plan not started — <a href="#" data-p90="start" style="color:var(--rose)">start today</a>'}</span><span class="note">Counts only while you're learning</span></div></div><div class="week" id="weekStrip" role="button" aria-label="This week — open the calendar">${weekHTML()}</div><button class="btn" data-sess>${S.sess&&S.sess.d===day()?'Resume 30-min session':'Start 30-min session'}</button>`;
   const nd=PIPE.filter(p=>p.dl&&daysTo(p.dl)>=0&&!['Applied','Interviewing','Skipped for now'].includes(pst(p))).sort((a,b)=>a.dl<b.dl?-1:1)[0];
-  const quick=`${nd?`<button class="btn ghost sm" data-gopipe style="width:100%;text-align:left">Next deadline: <b>${esc(nd.co)}</b> — ${daysTo(nd.dl)===0?'today':daysTo(nd.dl)===1?'tomorrow':daysTo(nd.dl)+' days'}</button>`:''}${goals}<button class="btn ghost" data-quick="mix">Quick 10 · mixed drill${weak?` · ${weak} weak spot${weak>1?'s':''}`:''}</button>`;
+  const quick=`${nd?`<button class="btn ghost sm" data-gopipe style="width:100%;text-align:left">Next deadline: <b>${esc(nd.co)}</b> — ${daysTo(nd.dl)===0?'today':daysTo(nd.dl)===1?'tomorrow':daysTo(nd.dl)+' days'}</button>`:''}${goals}<button class="btn ghost" data-quick="mix">Quick 10 · practise past topics${weak?` · ${weak} weak spot${weak>1?'s':''}`:''}</button><button class="btn ghost" data-notes>Notes · revise finished lessons</button>`;
   $('hero').innerHTML=next<0
    ?`${mins}<small>${t.name} track complete</small><h2>All ${ls.length} lessons done.</h2><div class="meter"><i style="width:100%"></i></div>${quick}`
    :`${mins}<div class="upnext"><small>Up next · ${t.name} · ${n} of ${ls.length} lessons</small><h2>${esc(ls[next].title)}</h2><div class="meter"><i style="width:${n/ls.length*100}%"></i></div><button class="btn ghost" data-open="${ls[next].id}">${n?'Continue lesson':'Start lesson'} →</button></div>${quick}`;
@@ -54,9 +54,13 @@ let L=null;
 function run(l){L={l,q:l.steps.map((_,i)=>i),done:0,miss:0,wrong:new Set()};$('lesson').hidden=false;document.body.style.overflow='hidden';step()}
 function openLesson(id){const l=ALL.find(x=>x.id===id);if(l)run(l)}
 function quick(mode){
+  /* Practice past topics: weak spots first, then questions from finished lessons you
+     have not seen for the longest time (spaced review), then anything else. */
   const pool=ALL.flatMap(l=>l.steps.filter(s=>s.t!=='learn'));
   const weak=shuffle(pool.filter(s=>S.miss[s.k]));
-  const rest=mode==='weak'?[]:shuffle(pool.filter(s=>!S.miss[s.k]));
+  const seen=S.seen||{},doneL=k=>!!S.done[k.split(':')[0]];
+  const byAge=a=>shuffle(a).sort((x,y)=>(seen[x.k]||'')<(seen[y.k]||'')?-1:(seen[x.k]||'')>(seen[y.k]||'')?1:0);
+  const rest=mode==='weak'?[]:byAge(pool.filter(s=>!S.miss[s.k]&&doneL(s.k)&&seen[s.k]!==day())).concat(shuffle(pool.filter(s=>!S.miss[s.k]&&!doneL(s.k))));
   const steps=weak.concat(rest).slice(0,10);
   if(!steps.length)return;
   run({id:'quick',title:mode==='weak'?'Weak spots':'Quick 10',steps});
@@ -81,6 +85,7 @@ function draw(){
   const src=L.l.id==='quick'?ALL.find(l=>s.k.startsWith(l.id+':')).title:L.l.title;
   if(s.t==='learn'){
     h=`<span class="tag">${esc(src)}</span><h2>${esc(s.h)}</h2><p>${s.body}</p>${codeHTML(s)}`;
+    if(L.done===0&&!L.testout&&!['quick','read'].includes(L.l.id)&&!S.done[L.l.id]&&L.l.steps.some(x=>x.t!=='learn'))h=`<button class="btn ghost sm" data-testout style="margin:0 0 12px">Already know this? Test out</button>`+h;
     if(s.code&&TRACKS.py.lessons.includes(L.l))h+=`<button class="btn ghost sm" id="tryIt">Run this in Code</button>`;
   }else if(s.t==='mcq'){
     h=`<span class="tag">${esc(src)} · quiz</span><h2>${esc(s.q)}</h2>${codeHTML(s)}<div class="opts">${s.opts.map((o,i)=>{
@@ -99,6 +104,7 @@ function draw(){
 function record(s,ok){
   if(ok){if(!L.wrong.has(s.k))delete S.miss[s.k]}else{L.wrong.add(s.k);S.miss[s.k]=1}
   S.att=S.att||{};S.rev=S.rev||{};
+  (S.seen=S.seen||{})[s.k]=day();
   if(!S.att[s.k])S.att[s.k]={ok,d:day()};
   else if(ok&&!L.wrong.has(s.k)&&S.att[s.k].d!==day())S.rev[s.k]=1;
   save();
@@ -128,13 +134,25 @@ function advance(){
   if(L.state==='fb'&&!L.ok){L.q.push(L.q.shift());L.miss++}else{L.q.shift();L.done++}
   if(!L.q.length)return finish();step();
 }
+function recapHTML(l){const ks=(l.steps||[]).filter(x=>x.t==='learn').map(x=>x.h);if(!ks.length||l.id==='quick')return'';
+  return`<div class="panel" style="text-align:left;width:100%"><h3>Key points</h3><ul style="margin:0;padding-left:18px">${ks.map(k=>`<li>${esc(k)}</li>`).join('')}</ul><p class="note" style="margin:6px 0 0">Saved to Notes for revision.</p></div>`}
+function openNotes(){
+  const done=Object.values(TRACKS).map(t=>({t,ls:t.lessons.filter(l=>S.done[l.id]&&l.steps.some(x=>x.t==='learn'))})).filter(g=>g.ls.length);
+  L={l:{id:'read',title:'Notes',steps:[]},q:[],done:0,miss:0,wrong:new Set(),state:'read'};
+  $('lesson').hidden=false;document.body.style.overflow='hidden';$('lbar').style.width='100%';
+  $('stage').innerHTML=`<span class="tag">Revision notebook</span><h2>Your notes</h2><p class="note">The teaching cards from every lesson you've finished, to skim before an interview.</p>`+(done.length?done.map(g=>`<h3 class="unit">${esc(g.t.name)}</h3>`+g.ls.map(l=>`<details class="panel"><summary style="cursor:pointer;font-weight:700">${esc(l.title)}</summary>${l.steps.filter(x=>x.t==='learn').map(x=>`<h4 style="margin:12px 0 4px">${esc(x.h)}</h4><p style="margin:0">${x.body}</p>${codeHTML(x)}`).join('')}</details>`).join('')).join(''):'<p>Finish a lesson and its teaching cards collect here.</p>');
+  $('lfoot').className='lfoot';$('fb').innerHTML='';$('act').disabled=false;$('act').textContent='Close';
+}
 function finish(){
   {const qs=L.l.steps.filter(s=>s.t!=='learn').length,ft=qs-L.wrong.size;logItem(L.l.id==='quick'?'quiz':'lesson',L.l.id==='quick'?`${L.l.title}: ${ft}/${qs} right first try`:`Finished “${L.l.title}”${qs?` — ${ft}/${qs} right first try`:''}`)}
+  if(L.testout&&L.wrong.size){const n=L.wrong.size;logItem('lesson',`Tried to test out of “${L.l.title}” — ${n} wrong`);mark('quick');save();head();$('lbar').style.width='100%';
+    $('stage').innerHTML=`<div class="done-card"><h2>Not quite — take the full lesson</h2><p>${n} question${n>1?'s were':' was'} wrong the first time, so “${esc(L.l.title)}” stays open. The misses are in your weak spots.</p><button class="btn" data-open-lesson="${L.l.id}">Start the full lesson</button></div>`;
+    L.state='end';$('lfoot').className='lfoot';$('fb').innerHTML='';$('act').disabled=false;$('act').textContent='Close';return}
   const isQ=L.l.id==='quick',first=!isQ&&!S.done[L.l.id];
   const gain=isQ?10:first?10+(L.miss?0:5):2;
   S.xp+=gain;if(!isQ)S.done[L.l.id]=true;mark(isQ?'quick':'lesson');bump();save();head();$('lbar').style.width='100%';
   const weak=Object.keys(S.miss).length;
-  $('stage').innerHTML=`<div class="done-card"><div class="big">+${gain} XP</div><h2>${esc(L.l.title)} done</h2><p>${L.miss?`${L.miss} mistake${L.miss>1?'s':''} corrected along the way.`:'Clean run — no mistakes.'}${weak?` ${weak} item${weak>1?'s':''} in weak spots.`:''}</p><div class="stats"><div class="stat"><b>${S.streak}</b><small>day streak</small></div><div class="stat"><b>${S.xp}</b><small>total XP</small></div><div class="stat"><b>${lessonsDone()}</b><small>lessons</small></div></div>${(L.l.ref||[]).length?`<div class="panel links" style="text-align:left;width:100%"><h3>Go deeper — official sources</h3>${L.l.ref.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join('')}</div>`:''}</div>`;
+  $('stage').innerHTML=`<div class="done-card"><div class="big">+${gain} XP</div><h2>${esc(L.l.title)} done</h2><p>${L.miss?`${L.miss} mistake${L.miss>1?'s':''} corrected along the way.`:'Clean run — no mistakes.'}${weak?` ${weak} item${weak>1?'s':''} in weak spots.`:''}</p>${recapHTML(L.l)}<div class="stats"><div class="stat"><b>${S.streak}</b><small>day streak</small></div><div class="stat"><b>${S.xp}</b><small>total XP</small></div><div class="stat"><b>${lessonsDone()}</b><small>lessons</small></div></div>${(L.l.ref||[]).length?`<div class="panel links" style="text-align:left;width:100%"><h3>Go deeper — official sources</h3>${L.l.ref.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join('')}</div>`:''}</div>`;
   L.state='end';$('lfoot').className='lfoot';$('fb').innerHTML='';$('act').disabled=false;$('act').textContent='Done';
 }
 
@@ -143,6 +161,8 @@ $('stage').addEventListener('input',e=>{if(e.target.id==='taskIn'&&L&&L.state===
 $('xBtn').addEventListener('click',closeLesson);
 $('stage').addEventListener('click',e=>{
   if(!L)return;
+  if(e.target.closest('[data-testout]')){L.testout=true;L.q=L.q.filter(i=>L.l.steps[i].t!=='learn');step();return}
+  {const ol=e.target.closest('[data-open-lesson]');if(ol){const l=ALL.find(x=>x.id===ol.dataset.openLesson);closeLesson();if(l)run(l);return}}
   if(e.target.id==='tryIt'){const code=L.l.steps[L.q[0]].code;closeLesson();show('play');pick('free',code+'\n');return}
   if(L.state==='rubric'){const rb=e.target.closest('[data-rb]');if(rb){L.ticks[+rb.dataset.rb]=!L.ticks[+rb.dataset.rb];const y=$('stage').scrollTop;draw();$('stage').scrollTop=y}return}
   if(L.state!=='ask')return;
@@ -155,6 +175,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('#lesson'))return;
   const o=e.target.closest('[data-open]');if(o)openLesson(o.dataset.open);
   const q=e.target.closest('[data-quick]');if(q)quick(q.dataset.quick);
+  if(e.target.closest('[data-notes]'))openNotes();
   const tr=e.target.closest('[data-track]');if(tr){S.track=tr.dataset.track;save();renderLearn()}
 });
 
