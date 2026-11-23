@@ -36,7 +36,7 @@ function renderLearn(){
   const td=today(),goals=`<div class="goals" aria-label="Today's goals">${GOALS.map(([k,n,lab])=>`<div class="goal${td[k]>=n?' met':''}"><b>${td[k]>=n?'✓':Math.min(td[k],n)+'/'+n}</b>${lab}</div>`).join('')}</div>`;
   const mins=`<div class="today"><div class="ring" id="minRing" style="--p:0"><b id="minNum">0</b><small>min</small></div><div class="ttxt"><b id="minTxt"></b><span>${S.p90?`${planPaused()?'Plan paused · ':''}Day ${Math.min(p90Day(),90)} of 90 · ends ${esc(new Date(p90End()+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}`:'90-day plan not started — <a href="#" data-p90="start" style="color:var(--rose)">start today</a>'}</span><span class="note">Counts only while you're learning</span></div></div><div class="week" id="weekStrip" role="button" aria-label="This week — open the calendar">${weekHTML()}</div><button class="btn" data-sess>${S.sess&&S.sess.d===day()?'Resume 30-min session':'Start 30-min session'}</button>`;
   const nd=PIPE.filter(p=>p.dl&&daysTo(p.dl)>=0&&!['Applied','Interviewing','Skipped for now'].includes(pst(p))).sort((a,b)=>a.dl<b.dl?-1:1)[0];
-  const quick=`${nd?`<button class="btn ghost sm" data-gopipe style="width:100%;text-align:left">Next deadline: <b>${esc(nd.co)}</b> — ${daysTo(nd.dl)===0?'today':daysTo(nd.dl)===1?'tomorrow':daysTo(nd.dl)+' days'}</button>`:''}${goals}<button class="btn ghost" data-quick="mix">Quick 10 · practise past topics${weak?` · ${weak} weak spot${weak>1?'s':''}`:''}</button><button class="btn ghost" data-notes>Notes · revise finished lessons</button>`;
+  const quick=`${nd?`<button class="btn ghost sm" data-gopipe style="width:100%;text-align:left">Next deadline: <b>${esc(nd.co)}</b> — ${daysTo(nd.dl)===0?'today':daysTo(nd.dl)===1?'tomorrow':daysTo(nd.dl)+' days'}</button>`:''}${goals}<button class="btn ghost" data-quick="mix">Quick 10 · practise past topics${weak?` · ${weak} weak spot${weak>1?'s':''}`:''}</button><button class="btn ghost" data-notes>Notes · revise finished lessons</button><button class="btn ghost" data-assess>Timed assessment · 12 questions + coding</button>`;
   $('hero').innerHTML=next<0
    ?`${mins}<small>${t.name} track complete</small><h2>All ${ls.length} lessons done.</h2><div class="meter"><i style="width:100%"></i></div>${quick}`
    :`${mins}<div class="upnext"><small>Up next · ${t.name} · ${n} of ${ls.length} lessons</small><h2>${esc(ls[next].title)}</h2><div class="meter"><i style="width:${n/ls.length*100}%"></i></div><button class="btn ghost" data-open="${ls[next].id}">${n?'Continue lesson':'Start lesson'} →</button></div>${quick}`;
@@ -65,6 +65,24 @@ function quick(mode){
   if(!steps.length)return;
   run({id:'quick',title:mode==='weak'?'Weak spots':'Quick 10',steps});
 }
+/* Timed assessment (like a bootcamp's mock test): 12 questions from your focus roles,
+   one attempt each, no retries, then a timed coding drill. */
+const FOCUS=['devops','sre','sdet'];
+function assess(){
+  const ids=[...new Set(ROLES.filter(r=>FOCUS.includes(r.id)).flatMap(r=>r.lessons))];
+  const pool=ALL.filter(l=>ids.includes(l.id)).flatMap(l=>l.steps.filter(x=>x.t==='mcq'||x.t==='fill'));
+  if(!pool.length)return;
+  run({id:'assess',title:'Timed assessment',steps:shuffle(pool).slice(0,12)});L.assess=true;L.t0=Date.now();
+}
+function finishAssess(){
+  const n=L.l.steps.length,ok=n-L.wrong.size,sec=Math.round((Date.now()-L.t0)/1000),pct=Math.round(ok/n*100);
+  (S.assess=S.assess||[]).push({d:day(),ok,n,sec});if(S.assess.length>30)S.assess.shift();
+  logItem('quiz',`Timed assessment: ${ok}/${n} in ${Math.round(sec/60)} min`);mark('quick');bump();save();head();$('lbar').style.width='100%';
+  const hist=S.assess.slice(-6,-1).map(a=>`${a.d}: ${a.ok}/${a.n}`).join(' · ');
+  $('stage').innerHTML=`<div class="done-card"><h2>${ok}/${n} · ${pct}%</h2><p>${Math.floor(sec/60)} min ${sec%60} s for the questions. ${pct>=80?'Interview-ready on these topics.':pct>=60?'Close. The misses are now in your weak spots.':'Below the bar for now. Work through the weak spots, then retake it in a few days.'}</p>${hist?`<p class="note">Earlier: ${hist}</p>`:''}<p>Part 2: one medium coding drill in interview mode (timed, no hints).</p><button class="btn" id="assessDrill">Start the coding drill</button></div>`;
+  L.state='end';$('lfoot').className='lfoot';$('fb').innerHTML='';$('act').disabled=false;$('act').textContent='Close';
+}
+document.addEventListener('click',e=>{if(e.target.id!=='assessDrill')return;closeLesson();const meds=CHAL.filter(c=>c.id!=='free'&&(c.diff||DIFF[c.id])==='medium'),un=meds.filter(c=>!S.done['ch_'+c.id]),c=shuffle(un.length?un:meds)[0];S.imode=true;save();show('play');codeMode('drills');pick(c.id)});
 function closeLesson(){$('lesson').hidden=true;document.body.style.overflow='';L=null;renderLearn();if(!$('v-me').hidden)renderMe()}
 function codeHTML(s){
   if(!s.code)return'';
@@ -131,6 +149,7 @@ function check(){
   $('act').disabled=false;$('act').textContent='Continue';
 }
 function advance(){
+  if(L.assess){L.q.shift();L.done++;if(!L.q.length)return finishAssess();return step()}
   if(L.state==='fb'&&!L.ok){L.q.push(L.q.shift());L.miss++}else{L.q.shift();L.done++}
   if(!L.q.length)return finish();step();
 }
@@ -176,6 +195,7 @@ document.addEventListener('click',e=>{
   const o=e.target.closest('[data-open]');if(o)openLesson(o.dataset.open);
   const q=e.target.closest('[data-quick]');if(q)quick(q.dataset.quick);
   if(e.target.closest('[data-notes]'))openNotes();
+  if(e.target.closest('[data-assess]'))assess();
   const tr=e.target.closest('[data-track]');if(tr){S.track=tr.dataset.track;save();renderLearn()}
 });
 
@@ -215,6 +235,16 @@ function renderDocs(){
 }
 document.addEventListener('click',e=>{const g=e.target.closest('[data-guide]');if(g){guideOpen=g.dataset.guide||null;renderRoles();window.scrollTo(0,0)}});
 document.addEventListener('input',e=>{if(e.target.id==='docQ'){docQ=e.target.value;renderRoles()}});
+function aiPrompt(r){
+  const bio=(typeof CT_PERSONAL!=='undefined'&&CT_PERSONAL.bio)||'[2–3 lines about your experience]';
+  return `Act as a senior interviewer at a product company's Hyderabad engineering centre, hiring for the role of ${r.name} (about 4 years' experience).
+My background: ${bio}
+Run a realistic 30-minute interview in these rounds: ${r.rounds.join('; ')}.
+Rules: ask ONE question at a time and wait for my answer. Mix fundamentals, a scenario or troubleshooting question, one design question and one behavioural question. Push back with follow-ups when my answer is vague, like a real interviewer. Don't teach during the interview.
+Topics to draw from: ${r.skills.join(', ')}.
+At the end, score me 1–5 on technical depth, problem solving, communication and role fit, list my three weakest answers with a model answer for each, and tell me whether you'd pass me to the next round and why.`}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-aiprompt]');if(!b)return;const r=ROLES.find(x=>x.id===b.dataset.aiprompt),t=aiPrompt(r),m=$('aiMsg');
+  try{await navigator.clipboard.writeText(t);m.textContent='Copied. Paste it into Claude (voice mode works best).'}catch(_){m.innerHTML=`<textarea readonly style="width:100%;min-height:180px">${esc(t)}</textarea><br>Select all and copy.`}});
 function renderRoles(){
   if(timer){clearInterval(timer);timer=null}
   document.querySelectorAll('[data-rv]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.rv===rv));
@@ -247,6 +277,7 @@ function renderRoles(){
     <div class="panel"><h3>Typical interview rounds</h3><ol class="rounds">${r.rounds.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></div>
     <div class="panel"><h3>Practise in this app</h3><div class="btnrow">${r.lessons.map(id=>{const l=ALL.find(x=>x.id===id);return`<button class="btn ghost sm" data-open="${id}">${S.done[id]?'✓ ':''}${esc(l.title)}</button>`}).join('')}</div>
       <div class="btnrow" style="margin-top:10px">${r.decks.map(d=>`<button class="btn sm" data-deck="${d}">${DECK[d]} Q&amp;A</button>`).join('')}<button class="btn sm" data-rv="stories">My stories</button></div></div>
+    <div class="panel"><h3>Mock interview with Claude</h3><p class="note" style="margin:0 0 10px">Copy this prompt, open the Claude app, start voice mode and paste it. Claude plays the interviewer for this role, one question at a time, and scores you at the end.</p><button class="btn sm" data-aiprompt="${r.id}">Copy interview prompt</button><p class="note" id="aiMsg" style="margin:8px 0 0"></p></div>
     <div class="panel"><h3>Certifications worth it</h3><p style="margin:0">${esc(r.certs)}</p></div>
     <div class="panel links"><h3>Free resources</h3>${r.links.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${esc(t)} ↗</a>`).join('')}</div>`;
     return;
@@ -899,7 +930,7 @@ function renderCal(){
    <div class="calhd"><button class="btn ghost sm" data-calm="-1" aria-label="Previous month">‹</button><b>${esc(mn)}</b><button class="btn ghost sm" data-calm="1" aria-label="Next month">›</button></div>
    <div class="cal"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>${cells}</div>
    <p class="note legend"><i class="lg met"></i>goal met <i class="lg part"></i>some learning <i class="lg miss"></i>nothing done <i class="lg pause"></i>paused <i class="lg in"></i>inside the 90 days</p>
-   <label for="goalSel">Daily goal</label><select id="goalSel">${[15,20,30,45,60,90].map(n=>`<option value="${n}" ${n===goalMin()?'selected':''}>${n} minutes</option>`).join('')}</select>
+   <label for="goalSel">Daily goal</label><select id="goalSel">${[15,20,30,45,60,90,120].map(n=>`<option value="${n}" ${n===goalMin()?'selected':''}>${n} minutes</option>`).join('')}</select>
    <div id="calDay" style="margin-top:14px">${dayDetail(calSel)}</div>`;
 }
 const fmtD=d=>new Date(d+'T12:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
@@ -1085,7 +1116,7 @@ function itemHTML(it){
 }
 function renderPlan90(){
   const box=$('plan90');if(!box)return;
-  if(!S.p90){box.innerHTML=`<h3>90-day job plan</h3><p class="note">Twelve focused weeks: coding without AI, Linux, storage (your edge), Kubernetes, CI/CD, SRE, security, system design, then mocks and applications. 30 minutes a day on weekdays, a bit more at weekends.</p><button class="btn" id="p90start">Start my 90 days today</button>`;return}
+  if(!S.p90){box.innerHTML=`<h3>90-day job plan</h3><p class="note">Twelve focused weeks: coding without AI, Linux, storage (your edge), Kubernetes, CI/CD, SRE, security, system design, then mocks and applications. Covering it properly takes about 90 minutes on weekdays and 3–4 hours at weekends; set your daily goal to match.</p><button class="btn" id="p90start">Start my 90 days today</button>`;return}
   const w=weekNow(),done=PLAN90.flat().length&&PLAN90.reduce((a,[_,its])=>a+its.filter(itemDone).length,0),tot=PLAN90.reduce((a,[_,its])=>a+its.length,0);
   box.innerHTML=`<h3>90-day job plan · week ${w+1} of 12</h3><div class="meter" style="margin:8px 0"><i style="width:${Math.round(done/tot*100)}%"></i></div><p class="note">${done} of ${tot} tasks done · day ${Math.min(p90Day(),90)} of 90${planPaused()?' · paused':''}</p>${planCtlHTML()}`+
    PLAN90.map(([title,its],i)=>`<details ${i===w?'open':''} style="border-top:1px solid var(--line);padding:8px 0"><summary style="cursor:pointer;font-weight:700;min-height:32px">${its.every(itemDone)?'✓ ':''}Week ${i+1} · ${esc(title)}${i===w?' · this week':''}</summary><ul style="list-style:none;margin:6px 0 0;padding:0">${its.map(itemHTML).join('')}</ul></details>`).join('')+
