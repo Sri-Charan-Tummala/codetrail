@@ -2,7 +2,7 @@
 // App files: network first (so updates arrive), cache when offline.
 // Python (Pyodide from jsDelivr): cache first, saved the first time it downloads,
 // or all at once with "Get Python ready for offline".
-const CACHE = 'codetrail-v5';
+const CACHE = 'codetrail-v6';
 const PY_CACHE = 'codetrail-py-0.26.4';
 const SHELL = ['./', './index.html', './css/app.css', './js/personal-loader.js', './js/lessons.js', './js/content.js', './js/library.js', './js/app.js', './js/pyworker.js', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => {

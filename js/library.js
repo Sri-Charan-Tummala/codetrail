@@ -365,3 +365,146 @@ done</pre>
 DOCS.push(
 {cat:'More official references',items:[['DORA — State of DevOps research','https://dora.dev/','The four key delivery metrics and research behind them.'],['Kubernetes — Horizontal Pod Autoscaling','https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/','Including custom and external metrics.'],['KEDA — event-driven autoscaling','https://keda.sh/docs/','Scale on queues, Kafka lag, cron.'],['Prometheus — alerting rules','https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/','Writing alerts with for: and labels.'],['AWS IAM — policy evaluation logic','https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html','Implicit vs explicit deny.'],['OWASP Cheat Sheet Series','https://cheatsheetseries.owasp.org/','Practical secure-coding guidance.'],['SLSA — supply-chain security levels','https://slsa.dev/','Build integrity and provenance.'],['NetApp documentation','https://docs.netapp.com/','For storage-company interviews.'],['Commvault documentation','https://documentation.commvault.com/','Backup concepts as another vendor implements them.']]});
 FEED.push({d:`2026-11-21`,items:[`23 more reported interview questions — Commvault, NetApp, Cohesity, JPMorganChase, Deloitte, DTCC — each linked to its source; 4 new company guides.`,`12 more guides: production troubleshooting playbooks, PromQL & alerting, AWS core services, CI/CD design, pytest, Bash template, security essentials, coding patterns, behavioural-story map, company research, job-switch checklist, glossary.`]});
+
+/* ---------- Resilience & release engineering (Nov 2026) ---------- */
+DECK.rel=`Release & build`;
+{const add=(tr,arr)=>{const n=CARDS.filter(c=>c.tr===tr).length;arr.forEach(([q,a],i)=>CARDS.push({k:tr+(n+i),tr,q,a}))};
+add('sto',[
+[`How is recovering from ransomware different from a normal restore?`,`A normal restore assumes the backup is good and the environment is safe. After ransomware neither is true. Contain first and keep the backup system isolated. Find the earliest sign of compromise and pick a restore point before it. Restore into an isolated clean room, scan, and rotate credentials. Then restore in dependency order: identity and DNS, core infrastructure, then apps by business priority.`],
+[`What's an immutable backup, and why isn't read-only enough?`,`Immutable means a retention lock (WORM, object lock) that nobody, admins included, can shorten or remove before it expires. A read-only flag can be cleared by any admin, and attackers usually have admin rights by the time they reach backups.`],
+[`What is a cyber vault or isolated recovery environment?`,`A copy of critical backups on infrastructure that's logically or physically separate: its own network path that opens only to replicate, separate admin accounts with MFA, and immutable storage. It also has a clean environment where you can restore, scan and test data before it goes back to production.`],
+[`Full vs incremental vs differential vs synthetic full?`,`Full copies everything. Incremental copies changes since the last backup of any kind, so it's fast but a restore needs the whole chain. Differential copies changes since the last full, so a restore needs the full plus the latest differential. A synthetic full is built on the server from the last full and later incrementals, without touching the client.`],
+[`Incremental-forever: benefits and risks?`,`Benefits: after one full, only changed data moves, so backup windows and network load stay small. Risks: everything depends on the catalog and on the integrity of older data, so you must protect the server database, run integrity audits, and test restores of old versions as well as recent ones.`],
+[`Why protect the backup server's catalog or database?`,`It records every version and where it's stored. Lose it and the data is still on disk but you can't find it quickly, so restores slow to a crawl. Back up the database and its logs, keep a copy offsite, and include a server rebuild in the DR plan.`],
+[`How do you test a DR plan?`,`Start from the RPO and RTO agreed with the business. Run tabletop exercises for people and decisions. Run regular timed restores of real data into an isolated environment, with checksum and application-level checks. Then do failover tests or game days for critical services. Record measured times against the targets, fix the gaps, and update the runbook.`],
+[`During a real incident the restore fails. What do you do?`,`Stay calm and communicate. Check whether it's the data (a corrupt or missing version: try the previous version or another copy) or the path (network, permissions, target space, server load: fix it and retry). Escalate to the vendor early. Keep stakeholders updated on the realistic recovery time. Afterwards, add that failure mode to regular restore testing.`],
+[`How would you size backup storage?`,`Start with front-end capacity (data protected) and daily change rate. Multiply by retention (versions and days), divide by the expected dedup and compression ratio, then add growth and headroom (20–30%). Check the answer against real dedup ratios from a pilot, because databases and encrypted data deduplicate poorly.`],
+[`The nightly backup window keeps growing. How do you fix it?`,`Measure each stage: client read, network, server ingest and storage write. Check whether the data volume or file count grew, and whether jobs overlap with other jobs or with storage maintenance. Then fix the bottleneck: incremental-forever or synthetic fulls, more parallel sessions, client-side dedup, splitting huge file systems, or snapshot-based backups. Alert on job duration, not just job failure.`],
+[`How can backup data help detect ransomware?`,`Encrypted data looks random, so the dedup and compression ratios suddenly drop. The amount of changed data jumps. Many files change extension or get deleted. A good backup platform alerts on these signals, and the same signals help pick the last clean restore point.`],
+[`What would you put on a backup and DR dashboard?`,`Backup success rate. RPO compliance (age of the last good backup per system, not just "job succeeded"). Restore-test pass rate and measured restore time against RTO. Capacity and growth. Dedup ratio trends. Anomaly alerts. Show red when a system has no restorable copy inside its RPO.`]]);
+add('rel',[
+[`What does a release or build engineer do?`,`Makes shipping software repeatable and safe: owns the build and CI/CD pipelines, versioning, artefact repositories, branching and release processes, rollout strategies and rollback, and build speed and reliability. The goal is that any engineer can release with confidence, many times a day if needed.`],
+[`Why build once and promote the same artefact?`,`So what reaches production is exactly what passed testing. Rebuilding per environment lets unpinned dependencies, base images or build tools drift. Store the artefact with an immutable version, deploy containers by digest, and change only configuration between environments.`],
+[`Explain semantic versioning.`,`MAJOR.MINOR.PATCH: an incompatible API change bumps MAJOR, a backward-compatible feature bumps MINOR, a backward-compatible fix bumps PATCH. Pre-releases like 2.0.0-rc.1 rank below 2.0.0, and build metadata after + is ignored for ordering. It tells consumers whether an upgrade is safe.`],
+[`Trunk-based development vs GitFlow?`,`Trunk-based: short-lived branches merged to main at least daily, with flags hiding unfinished work. Smaller merges, faster feedback, and it suits continuous delivery. GitFlow: long-lived develop and release branches. More ceremony and painful merges, but sometimes used for products that ship versions to customers. Most teams that release often choose trunk-based.`],
+[`Production runs 2.3 but main has moved to 2.5. How do you ship a hotfix?`,`Fix on main with a test, then cherry-pick the commit to the 2.3 release branch (or fix on the branch and merge forward, so the fix isn't lost). Run the same pipeline, tag 2.3.1, promote it through staging, and roll out with the normal safety checks. Make sure 2.5 has the fix too.`],
+[`Rolling vs blue-green vs canary?`,`Rolling replaces instances a few at a time: cheap, but slower to undo. Blue-green runs a full new stack and switches traffic, so rollback is instant but costs double capacity during the release. Canary sends a small share of traffic to the new version, compares metrics, then widens. It's the best way to limit how many users a bad release hits.`],
+[`Rollback or roll forward?`,`Roll back by default when users are hurting and the cause isn't certain: it's the fastest known-good state. Roll forward when the fix is small, understood and faster than reverting, or when a rollback is impossible, for example after a one-way data migration.`],
+[`How do you make a database change safe to roll back?`,`Expand and contract. First add the new column or table and make the code write to both. Backfill. Switch reads to the new one. Only in a later release drop the old one. At every step both the current and previous app versions work against the schema, so you can always roll back one release.`],
+[`Feature flags: benefits and risks?`,`Benefits: deploy dark, release to a percentage of users, kill-switch a feature without redeploying, and keep trunk releasable. Risks: flag debt, untested on/off combinations and config errors. Give every flag an owner and an expiry date, test both paths, and remove flags once the feature is fully released.`],
+[`The pipeline takes 45 minutes. How do you speed it up?`,`Measure each stage first. Then: cache dependencies and Docker layers; run independent jobs in parallel; split tests across runners; build and test only what changed in a monorepo; use smaller base images; fix or quarantine flaky tests; and move slow end-to-end suites to run after merge with fast smoke tests before. Track the time as a metric.`],
+[`What are SBOM, artefact signing and SLSA provenance?`,`An SBOM lists every component in an artefact (SPDX or CycloneDX), so you can tell in minutes whether a CVE affects you. Signing, for example with Sigstore cosign, proves who published the artefact and that it hasn't changed. Provenance, as defined by SLSA, is a signed record of the source, builder and steps. Deploy-time policy can refuse anything unsigned or without provenance.`],
+[`How do you make builds reproducible?`,`Pin everything: lockfiles with hashes, base images by digest, and fixed tool versions. Build in clean, ephemeral containers rather than long-lived agents. Avoid network fetches during the build where you can. Strip timestamps and other non-deterministic output. The same commit should then produce the same artefact.`],
+[`A release just caused errors in production. Walk me through it.`,`Declare the incident and mitigate first: halt the rollout, roll back or switch off the flag. Confirm recovery with metrics. Communicate status. Then find the cause from the diff, logs and traces. Afterwards, write a blameless postmortem and add a pipeline guard so it can't recur: a test, a canary metric or a migration check.`],
+[`What release metrics would you track?`,`The DORA metrics: deployment frequency, lead time for changes, change failure rate, and the time to recover from a failed deployment. Add pipeline duration and flaky-test rate. Use them to find bottlenecks, not to rank people.`]]);}
+SIMS.push(
+{id:'ransom',title:`Ransomware on the file servers`,brief:`02:10: users on night shift report files renamed *.locked on the finance share. Endpoint protection flags mass encryption on fs01 and fs02.`,steps:[
+ {q:`What's your first move?`,opts:[
+  {cmd:`Isolate fs01 and fs02 from the network (EDR network quarantine); keep them powered on`,out:`fs01, fs02: network contained. Encryption activity stops spreading to other shares.`,ok:true,why:`Contain first. Leaving them powered on keeps memory and disk evidence for forensics.`},
+  {cmd:`Restore the finance share from last night's backup right away`,out:`Restore started… new files are encrypted again within minutes.`,ok:false,why:`The attacker is still active, so you're restoring into a burning building.`},
+  {cmd:`Shut down and reimage fs01`,out:`fs01 reimaged. Forensic evidence lost; the infection on fs02 continues.`,ok:false,why:`You destroyed evidence and didn't stop the spread.`}]},
+ {q:`Are the backups safe? Check the backup server.`,opts:[
+  {cmd:`Review the backup server's activity log for admin logins and delete or expire commands`,out:`01:58 admin bkp_svc logged in from 10.4.7.22 (not a normal admin host)
+02:01 DELETE on storage pool FIN_IMMUTABLE — DENIED: retention lock until 2027-02-14
+02:02 UPDATE retention on FIN_DISK — 2 versions → 0`,ok:true,why:`The attacker had backup admin credentials. The immutable pool held, but the ordinary disk pool's retention was cut.`},
+  {cmd:`Run a new full backup of fs01 now`,out:`Backup of encrypted data completed — 0% dedup, 1.2 TB`,ok:false,why:`You just backed up encrypted files, and with retention cut it may push good versions out.`},
+  {cmd:`Assume backups are fine; the backup server is separate`,out:`(no information gained)`,ok:false,why:`Attackers go after backups first. Check, don't assume.`}]},
+ {q:`Pick the restore point.`,opts:[
+  {cmd:`Find the earliest sign of compromise in EDR and logs, then pick an immutable version from before it`,out:`First malicious login: 14 Nov 23:40 (stolen VPN account)
+Chosen: FIN_IMMUTABLE version from 14 Nov 20:00`,ok:true,why:`The attacker was inside for days. Restoring from before the intrusion avoids bringing their tools back.`},
+  {cmd:`Restore last night's version`,out:`Restored files include a scheduled task that launches the encryptor at 02:00.`,ok:false,why:`Last night's backup already contained the attacker's persistence.`},
+  {cmd:`Pay the ransom for the decryptor`,out:`(not your call, and no guarantee it works)`,ok:false,why:`Leadership and legal decide that. Your job is to show whether clean recovery is possible.`}]},
+ {q:`Where do you restore it?`,opts:[
+  {cmd:`Restore into an isolated clean-room network, scan it, rotate credentials, then promote to production`,out:`Scan clean. bkp_svc and VPN credentials rotated, MFA enforced. Finance share back by 09:30.`,ok:true,why:`Proving the data is clean before reconnecting prevents re-infection.`},
+  {cmd:`Restore straight onto the original fs01`,out:`fs01 still has the attacker's scheduled task. Re-encrypted at 10:00.`,ok:false,why:`The compromised host and credentials are still in play.`},
+  {cmd:`Email the files to the finance team`,out:`(1.2 TB — not possible; also a data-handling breach)`,ok:false,why:`Not a recovery method.`}]}],
+ root:`A stolen VPN account led to backup admin credentials. The attacker cut normal backup retention and encrypted the file servers; only the retention-locked pool survived.`,
+ fix:`Restore from the immutable copy in a clean room. Separate backup admin accounts from the domain with MFA. Require a second approver for retention changes and deletes. Alert on retention changes and logins from unusual hosts. Run a ransomware recovery drill every quarter.`},
+{id:'badrel',title:`Release broke another service`,brief:`10 minutes after orders v4.2 went out, the error rate on the invoices service jumps to 8%. The orders service itself looks healthy.`,steps:[
+ {q:`Find out what's failing.`,opts:[
+  {cmd:`kubectl logs deploy/invoices --since=15m | grep -i error | sort | uniq -c | sort -rn | head`,out:`  412 ERROR psycopg.errors.UndefinedColumn: column orders.cust_id does not exist`,ok:true,why:`invoices still reads cust_id, which the orders release no longer has.`},
+  {cmd:`kubectl rollout restart deploy/invoices`,out:`(errors continue at 8%)`,ok:false,why:`Restarting without a hypothesis changes nothing.`},
+  {cmd:`kubectl top pods -n invoices`,out:`cpu 12%  mem 40%`,ok:false,why:`It isn't a resource problem.`}]},
+ {q:`What did orders v4.2 change?`,opts:[
+  {cmd:`git diff v4.1..v4.2 -- migrations/`,out:`ALTER TABLE orders RENAME COLUMN cust_id TO customer_id;`,ok:true,why:`A one-step rename. Every other reader of that column broke the moment the migration ran.`},
+  {cmd:`Check the load balancer`,out:`(healthy)`,ok:false,why:`The failure is in the database schema, not traffic.`},
+  {cmd:`Ask in the team channel and wait`,out:`(no reply for 20 minutes)`,ok:false,why:`Look at the change yourself; the diff answers it in seconds.`}]},
+ {q:`Mitigate. The error rate is still 8%.`,opts:[
+  {cmd:`kubectl rollout undo deploy/orders`,out:`orders pods → CrashLoopBackOff: column orders.cust_id does not exist`,ok:false,why:`The schema already moved forward, so the old orders code can't run either. Rollback isn't safe after a destructive migration.`},
+  {cmd:`Apply the reviewed hotfix migration: add cust_id back as a generated column mirroring customer_id`,out:`ALTER TABLE orders ADD COLUMN cust_id bigint GENERATED ALWAYS AS (customer_id) STORED;
+invoices error rate 8% → 0.1% in 2 minutes`,ok:true,why:`Rolling forward to a compatible schema fixes both services with no data loss.`},
+  {cmd:`Restore the orders database from last night's backup`,out:`(would lose today's orders and take 2 hours)`,ok:false,why:`Data loss and a long outage for a schema problem.`}]},
+ {q:`What stops this happening again?`,opts:[
+  {cmd:`Expand/contract migrations over two releases, plus a CI check that flags destructive migrations and contract tests for shared tables`,out:`Pipeline now fails on RENAME/DROP COLUMN without an approved plan.`,ok:true,why:`Old and new code can both run at every step, so rollback always works.`},
+  {cmd:`Freeze all releases for a month`,out:`(lead time grows; the risk is unchanged)`,ok:false,why:`It doesn't fix how changes are made.`},
+  {cmd:`Add a manual QA sign-off for every release`,out:`(slower, and QA wouldn't have tested invoices)`,ok:false,why:`The gap was cross-service compatibility, which a contract test catches automatically.`}]}],
+ root:`orders v4.2 renamed a shared column in one migration, breaking the invoices service and making a rollback of orders impossible.`,
+ fix:`Roll forward with a compatible column. Adopt expand/contract migrations, block destructive migrations in CI without a plan, and add contract tests for any table another service reads.`});
+ROLES.push({id:'rel',name:`Release / build engineer`,sum:`Makes shipping safe and repeatable: CI/CD pipelines, versioning, artefact repositories, branching, rollouts and rollback. Your CI/CD jobs, multi-platform release validation and restore-guard's pipeline are direct evidence.`,
+ rounds:[`Recruiter / HR screen`,`Technical — Git, CI/CD, build tools, scripting`,`Deep dive — pipeline design, artefacts, branching and versioning`,`Scenario — a bad release, a broken pipeline or a slow build`,`Behavioural — working with many teams, release-day pressure`],
+ skills:[`Git: branching, cherry-pick, tags, bisect`,`Pipeline design: Jenkins and GitHub Actions`,`Build once, promote; artefact repositories`,`Semantic versioning and release notes`,`Rollouts: rolling, blue-green, canary, flags`,`Rollback and expand/contract migrations`,`Docker images and registries`,`Helm and GitOps`,`Supply-chain security: SBOM, signing, provenance`,`Python and Bash for build tooling`],
+ lessons:['o3','o6','o19','o24','o25','o26','o4','o22','o8','k13','o15'],decks:['rel','ops','scn','rep'],certs:`Not essential. A public repo with a real pipeline (restore-guard) proves more; GitHub Actions or Jenkins certifications are optional extras.`,
+ links:[[`Google SRE book — Release engineering`,`https://sre.google/sre-book/release-engineering/`],[`Semantic Versioning 2.0.0`,`https://semver.org/`],[`Trunk-based development`,`https://trunkbaseddevelopment.com/`],[`SLSA`,`https://slsa.dev/`]]});
+{const r=ROLES.find(x=>x.id==='res');['s10','s11','s12','k14','k17'].forEach(l=>{if(!r.lessons.includes(l))r.lessons.push(l)});}
+SYL.rel={lvl:'Release / build engineer: expected to own pipelines and releases end to end and make shipping boring.',items:[
+['Git & branching','must','Trunk-based vs GitFlow, cherry-pick hotfixes, tags, bisect, revert.',['o3','o24'],'5'],
+['CI/CD pipelines','must','Jenkins and GitHub Actions: stages, caching, matrices, secrets, speed.',['o6','o19','k13'],'5'],
+['Artefacts & versioning','must','Build once, promote; registries and repositories; semver; deploy by digest.',['o24','o4'],'5'],
+['Rollouts & rollback','must','Rolling, blue-green, canary, flags; expand/contract migrations.',['o25','o8','o22'],'5–6'],
+['Supply-chain security','strong','Pinning, SBOM, signing, provenance, OIDC credentials in CI.',['o26'],'8'],
+['Infrastructure as code','plus','Terraform modules and state for pipeline infrastructure.',['o15'],'6']]};
+SYL.res.items.push(
+['Cyber resilience & ransomware recovery','must','Immutable and isolated copies, clean restore points, recovery order.',['s10','s8'],'3, 8'],
+['DR testing & failover','must','Tabletop to full failover; measure RTO; failback and split-brain.',['s11','k17'],'3'],
+['Backup software internals','strong','Client/server/catalog, incremental-forever, synthetic fulls, retention.',['s12'],'3']);
+{const add=(w,items)=>{if(PLAN90[w])items.forEach(it=>PLAN90[w][1].push(it))};
+add(3,[['l','s11'],['l','s12']]);add(5,[['l','o24'],['l','o25'],['s','badrel']]);add(7,[['l','s10'],['s','ransom']]);add(8,[['l','o26']]);}
+[['s10',T('explain',`The CISO asks: "If ransomware hit us tonight, could we recover?" How do you answer, and how do you prove it?`,`Answer with evidence, not reassurance: which systems have an immutable or isolated copy inside their RPO; whether backup admin accounts are separate from the domain with MFA; when we last restored a critical system in a clean environment and how long it took against the RTO; the recovery order; and the gaps with owners and dates. Then run a timed ransomware recovery drill to prove it.`,{rubric:[`Gives evidence, not a yes/no`,`Mentions immutable or isolated copies`,`Mentions separate backup credentials / MFA`,`Cites a measured restore time against RTO`,`Proposes a drill and names the gaps`]})],
+ ['s12',T('explain',`A nightly backup that took 2 hours now takes 9. How do you investigate?`,`Compare against when it was fast: data volume, file count and change rate. Time each stage: client read, network, server ingest, storage write. Look for overlaps with other jobs or with storage maintenance, a full storage pool, client-side issues such as antivirus or millions of small files, and errors or retries in the logs. Fix the bottleneck, then alert on duration.`,{rubric:[`Compares with a known-good baseline`,`Breaks the job into stages`,`Checks overlap/scheduling and storage health`,`Uses logs and metrics, not guesses`,`Adds an alert on duration`]})],
+ ['o24',T('explain',`Design the release process for a service that ships weekly and sometimes needs hotfixes.`,`Trunk-based with short-lived branches and flags. CI builds an immutable, versioned artefact once and promotes it through staging to production by digest. Releases are tagged with semver. A hotfix is fixed on main and cherry-picked to the release branch, run through the same pipeline and tagged as a patch. Production rollout is a canary with automatic rollback, and release notes are generated from commits.`,{rubric:[`Build once, promote the same artefact`,`Versioning and tags`,`A hotfix path that doesn't lose the fix`,`Safe rollout with rollback`,`Automation over manual steps`]})],
+ ['o25',T('explain',`A release needs a database schema change. How do you keep it safe to roll back?`,`Expand and contract over several releases: add the new column or table and write to both; backfill; switch reads; only later drop the old one. Every release stays compatible with the previous app version. Test the migration on production-like data, make it non-blocking (online index builds), and roll the app out with a canary.`,{rubric:[`Expand/contract in multiple releases`,`Old and new versions both work at each step`,`Backfill step`,`Tests the migration on realistic data`,`Non-blocking migration / canary`]})],
+ ['o26',T('explain',`How would you secure a CI/CD pipeline end to end?`,`Protect main with reviews and required checks. Pin and scan dependencies. Build in ephemeral runners. Use OIDC for short-lived, least-privilege cloud credentials instead of stored keys. Keep secrets out of logs and away from untrusted pull requests. Generate an SBOM, sign artefacts and attach provenance. At deploy time, verify signatures and policy before anything runs.`,{rubric:[`Branch protection / reviews`,`Dependency pinning and scanning`,`Short-lived credentials (OIDC), least privilege`,`SBOM, signing and provenance`,`Verification at deploy time`]})]
+].forEach(([id,t])=>{const l=ALL.find(x=>x.id===id);if(l){t.k=l.id+':'+l.steps.length;l.steps.push(t)}});
+GUIDES.push(
+{id:'ransomrun',cat:'Technical cheat sheets',title:'Ransomware recovery runbook',sum:'The order of moves interviewers expect, from first alert to lessons learned.',body:`
+<h3>First hour</h3>
+<pre>1 Contain     isolate affected hosts (EDR quarantine), keep them powered on
+2 Protect     lock down the backup system: check admin logins, deletes, retention changes
+3 Declare     incident commander, comms lead, legal/security informed
+4 Preserve    logs, memory, disk images for forensics</pre>
+<h3>Choosing what to restore</h3>
+<pre>Find the earliest indicator of compromise (EDR, auth logs, VPN)
+Pick an immutable / isolated version from BEFORE it
+Restore to an isolated clean room → scan → verify (checksums, app checks)
+Rotate credentials (backup admins, service accounts, VPN) before reconnecting</pre>
+<h3>Recovery order</h3>
+<pre>Identity & DNS → network & security tools → backup server → databases → tier-1 apps → the rest</pre>
+<h3>Before it happens</h3>
+<ul><li>3-2-1-1-0: one copy immutable or offline; zero errors on restore tests.</li>
+<li>Backup admin accounts outside the domain, MFA, and a second approver for deletes and retention changes.</li>
+<li>Alerts on retention changes, unusual admin logins and sudden dedup or compression drops.</li>
+<li>A quarterly timed recovery drill, measured against the RTO.</li></ul>
+<p class="note">Sources: CISA #StopRansomware Guide; NIST SP 1800-11.</p>`},
+{id:'releng',cat:'Technical cheat sheets',title:'Release engineering one-pager',sum:'Versioning, branching, artefacts, rollouts and rollback on one screen.',body:`
+<h3>Versioning (semver)</h3>
+<pre>MAJOR.MINOR.PATCH   breaking . feature . fix
+2.0.0-rc.1 &lt; 2.0.0  pre-releases rank lower
+1.4.2+sha.9f2c      build metadata: ignored for ordering</pre>
+<h3>Branching</h3>
+<pre>Trunk-based  short branches → main daily; flags hide unfinished work
+Release br.  cut from main; only fixes go in; tag each patch
+Hotfix       fix on main → cherry-pick to release branch → tag x.y.(z+1)</pre>
+<h3>Artefacts</h3>
+<pre>Build once → push to registry/repository → promote the same digest
+Deploy images by digest:  app@sha256:…   never by "latest"</pre>
+<h3>Rollouts</h3>
+<pre>Rolling     cheap, slower undo
+Blue-green  instant switch back, double capacity
+Canary      1–10% first; auto-rollback on error/latency
+Flags       deploy ≠ release; kill switch</pre>
+<h3>Rollback-safe database changes</h3>
+<pre>Expand (add + dual write) → backfill → switch reads → Contract (drop old) in a LATER release</pre>
+<h3>Supply chain</h3>
+<pre>Pin + scan dependencies · SBOM (SPDX/CycloneDX) · sign (cosign) · SLSA provenance · OIDC creds</pre>
+<h3>Metrics</h3>
+<pre>DORA: deployment frequency · lead time · change failure rate · recovery time from failed deploys</pre>`});
