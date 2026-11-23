@@ -56,7 +56,7 @@
 
   <section id="v-play" hidden>
     <h2 class="pg">Practice</h2>
-    <div class="seg" role="group" aria-label="Practice mode"><button data-cm="drills" aria-pressed="true">Drills</button><button data-cm="ide" aria-pressed="false">IDE</button><button data-cm="sim" aria-pressed="false">Incidents</button></div>
+    <div class="seg" role="group" aria-label="Practice mode"><button data-cm="drills" aria-pressed="true">Drills</button><button data-cm="ide" aria-pressed="false">IDE</button><button data-cm="sim" aria-pressed="false">Incidents</button><button data-cm="lc" aria-pressed="false">LeetCode</button></div>
     <div id="drillUI">
     <p class="note" style="margin:0 0 14px">Classic interview problems, solved by you. Real Python runs in the browser; the first run downloads it (about 10&nbsp;MB).</p>
     <div class="row" style="align-items:center;margin:0 0 12px"><button class="btn ghost sm" id="imode" aria-pressed="false">Interview mode: off</button><span class="chip" id="iclock" hidden>⏱ 0:00</span></div>
@@ -68,6 +68,7 @@
     <div class="explain" id="explain" hidden></div>
     <pre id="out">Output appears here.</pre>
     </div>
+    <div id="lcUI" hidden></div>
     <div id="ideUI" hidden>
     <p class="note" style="margin:0 0 10px">Python 3.12 in your browser. Files can import each other and open() reads them. Standard library works; numpy and pandas load on first import. No threads, network or shell.</p>
     <div class="ftabs" id="ftabs" role="group" aria-label="Files"></div>

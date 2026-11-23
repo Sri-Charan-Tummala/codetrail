@@ -769,7 +769,7 @@ function ideInit(){
 
 ideInit();
 /* ---------- Time tracking: only active learning counts ---------- */
-const KIND={lesson:'Lessons',quiz:'Quick drills',cards:'Q&A cards',mock:'Mock interviews',drill:'Code drills',ide:'IDE',sim:'Incidents',stories:'Stories',focus:'Focus timer'};
+const KIND={lc:'LeetCode',lesson:'Lessons',quiz:'Quick drills',cards:'Q&A cards',mock:'Mock interviews',drill:'Code drills',ide:'IDE',sim:'Incidents',stories:'Stories',focus:'Focus timer'};
 const IDLE_MS=90000;
 let actAt=0,actK=null,lastTick=Date.now();
 const logDay=(d=day())=>{S.log=S.log||{};const g=S.log[d]=S.log[d]||{};g.sec=g.sec||{};g.items=g.items||[];g.n=g.n||{};return g};
@@ -957,9 +957,19 @@ $('sbar').addEventListener('click',e=>{if(e.target.id==='sNext')sessNext();if(e.
 let simCur=null;
 function codeMode(m){
   document.querySelectorAll('[data-cm]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.cm===m));
-  $('drillUI').hidden=m!=='drills';$('simUI').hidden=m!=='sim';$('ideUI').hidden=m!=='ide';if(m==='sim')renderSim();if(m==='ide')renderIde();
+  $('drillUI').hidden=m!=='drills';$('simUI').hidden=m!=='sim';$('ideUI').hidden=m!=='ide';$('lcUI').hidden=m!=='lc';if(m==='sim')renderSim();if(m==='ide')renderIde();if(m==='lc')renderLc();
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-cm]');if(b)codeMode(b.dataset.cm)});
+/* Curated LeetCode list: tick each one you solve WITHOUT AI help. */
+function renderLc(){
+  const box=$('lcUI'),done=S.lc||{},n=LC.filter(p=>done[p[0]]).length,wk=S.p90?Math.min(12,Math.ceil(p90Day()/7)):1;
+  const weeks=[...new Set(LC.map(p=>p[4]))].sort((a,b)=>a-b);
+  box.innerHTML=`<p class="note" style="margin:0 0 6px">${LC.length} free LeetCode problems picked for DevOps, SRE and SDET coding rounds: patterns, not volume. Solve in Python, timed, no AI. If you're stuck after 25 minutes, read one hint, then retry tomorrow.</p>
+  <div class="meter" style="margin:8px 0 4px"><i style="width:${Math.round(n/LC.length*100)}%"></i></div><p class="note" style="margin:0 0 12px">${n} of ${LC.length} solved${S.p90?` · plan week ${wk}`:''}</p>`+
+  weeks.map(w=>{const ps=LC.filter(p=>p[4]===w);return`<details class="panel" ${w===wk?'open':''}><summary style="cursor:pointer;font-weight:700">Week ${w} · ${ps.filter(p=>done[p[0]]).length}/${ps.length}</summary>${ps.map(([slug,t,d,topic])=>`<div style="display:flex;gap:10px;align-items:center;margin:10px 0"><button class="btn ${done[slug]?'':'ghost'} sm" data-lc="${slug}" aria-pressed="${!!done[slug]}" style="min-width:44px">${done[slug]?'✓':'○'}</button><div style="flex:1"><a href="https://leetcode.com/problems/${slug}/" target="_blank" rel="noopener">${esc(t)} ↗</a><br><small class="note">${d} · ${esc(topic)}${done[slug]?` · solved ${done[slug]}`:''}</small></div></div>`).join('')}</details>`}).join('');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-lc]');if(!b)return;S.lc=S.lc||{};const k=b.dataset.lc,p=LC.find(x=>x[0]===k);
+  if(S.lc[k])delete S.lc[k];else{S.lc[k]=day();S.xp+=5;mark('code');bump();logItem('lc',`LeetCode: ${p[1]}`)}save();head();renderLc()});
 function renderSim(){
   const box=$('simUI');
   if(!simCur){box.innerHTML=`<p class="note" style="margin:0 0 14px">Live-incident practice like the SRE on-call round. Pick the command you'd run; every choice shows realistic output and why it helps or not.</p>`+

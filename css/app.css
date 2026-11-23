@@ -16,7 +16,7 @@ header{display:flex;align-items:center;gap:10px;padding:calc(18px + env(safe-are
 .brand{font:800 22px "Inter Tight",sans-serif;flex:1;line-height:1}.brand b{color:var(--rose)}.brand small{display:block;font:500 12px Inter;color:var(--mute);margin-top:3px}
 .chip{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:99px;padding:6px 12px;font-weight:600;font-size:14px;white-space:nowrap}
 .chip svg{width:16px;height:16px}
-.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--card);border-radius:14px;padding:4px;margin:6px 0 18px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);background:var(--card);border-radius:14px;padding:4px;margin:6px 0 18px}
 .seg button{border:0;background:none;padding:8px 2px;border-radius:10px;font-weight:600;min-height:44px;color:var(--mute);font-size:14px}
 .seg button[aria-pressed=true]{background:var(--rose);color:#2a0f18}
 .hero{background:linear-gradient(135deg,#3a2146,#26182e);border-radius:22px;padding:22px;display:grid;gap:12px;margin-bottom:8px}

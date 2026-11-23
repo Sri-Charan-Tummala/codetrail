@@ -1001,3 +1001,27 @@ Provenance       → a signed record of what was built, from which source, by wh
  M(`What is an SBOM for?`,``,[`Speeding up builds`,`Listing every component and version in your software, so you can find out quickly whether a new vulnerability affects you`,`Signing container images`,`Replacing unit tests`],1,`When a CVE lands, an SBOM answers "are we affected, and where?" in minutes.`,`Name the formats: SPDX and CycloneDX.`),
  MN(`Your CI stores a long-lived cloud admin key as a secret. What's the better pattern?`,``,[`Rotate it once a year`,`Use OIDC to get short-lived, least-privilege credentials per job`,`Put the key in the repository, encrypted`,`Share one key across all pipelines`],1,`Short-lived tokens limit the damage if a job is compromised, and nothing long-lived can leak.`,[`Annual rotation still leaves a powerful key valid for months.`,``,`The key, and whoever can decrypt it, is still long-lived and overprivileged.`,`Sharing widens the blast radius.`]),
  F(`SBOMs are usually written in SPDX or ___ format`,`SPDX · ___`,[`CycloneDX`,`YAML`,`OpenAPI`,`Helm`],[`CycloneDX`],`SPDX (Linux Foundation) and CycloneDX (OWASP) are the two common SBOM standards.`)]});
+
+TRACKS.auto.lessons.push({id:'a10',u:`Testing at scale`,title:`Performance & contract testing`,ref:[[`Locust documentation`,`https://docs.locust.io/`],[`Pact documentation`,`https://docs.pact.io/`],[`Grafana k6 documentation`,`https://grafana.com/docs/k6/latest/`]],steps:[
+ Lr(`Performance test types`,`Each type answers a different question. Always define the goal first, as a target load and a latency SLO, and test in a production-like environment.`,`Load    → expected peak traffic: do we meet the SLO?
+Stress  → beyond peak until it breaks: where, and how does it fail?
+Spike   → sudden jumps: does autoscaling keep up?
+Soak    → normal load for hours: leaks, slow degradation`),
+ Lr(`Read results like an SRE`,`Averages hide pain: report p95 and p99 latency, error rate and throughput together. Watch the server side too (CPU, memory, database connections, queue depth) to find the bottleneck. A result without the bottleneck is only half an answer.`,`from locust import HttpUser, task, between
+
+class Shopper(HttpUser):
+    wait_time = between(1, 3)
+
+    @task(3)
+    def browse(self):
+        self.client.get("/products")
+
+    @task(1)
+    def checkout(self):
+        self.client.post("/checkout", json={"cart_id": 42})`),
+ Lr(`Contract testing`,`End-to-end tests across many services are slow and flaky. With consumer-driven contracts (Pact), each consumer records the requests it makes and the responses it relies on; the provider's CI checks every contract, so a breaking change fails before it ships.`),
+ M(`Which metric should you report for API latency in a load test?`,``,[`The average`,`p95 and p99, with the error rate and throughput`,`The fastest response`,`Only the error rate`],1,`Percentiles show what your slowest users experience; averages hide spikes.`,`Tie the numbers to the SLO, for example "p99 under 300 ms at 500 RPS".`),
+ MN(`Memory slowly climbs over a 6-hour test at normal load. Which test found it?`,``,[`A soak test`,`A spike test`,`A unit test`,`A smoke test`],0,`Leaks and slow degradation only show over long runs at steady load.`,[``,`A spike test checks sudden jumps over minutes.`,`Unit tests don't run long enough under load.`,`A smoke test is a quick check that the basics work.`]),
+ M(`What does contract testing catch?`,``,[`UI layout bugs`,`A provider change that breaks what a consumer relies on, before deployment`,`Slow database queries`,`Spelling errors in logs`],1,`The provider verifies every consumer's expectations in its own CI.`,`It replaces many slow cross-service end-to-end tests.`),
+ F(`Locust: weight a task to run three times as often with @task(___)`,`@task(___)
+def browse(self): ...`,[`3`,`0.3`,`"x3"`,`300`],[`3`],`The integer is the task's relative weight.`)]});
